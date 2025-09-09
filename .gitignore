@@ -159,3 +159,5 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+devnet-usdc.json
+publish.out.json

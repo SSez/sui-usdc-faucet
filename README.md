@@ -53,7 +53,7 @@ echo "USDC_PACKAGE=$USDC_PACKAGE" && echo "TREASURY=$TREASURY" && echo "TREASURY
 
 ```bash
 # In a separate terminal or after returning to this repo
-cd /home/user/Documents/git/sui/faucet
+cd /path/to/sui-usdc-faucet
 
 sui move build
 
@@ -145,8 +145,8 @@ echo "FAUCET_PACKAGE=$FAUCET_PACKAGE"
 You will need the USDC package ID and the TreasuryCap<USDC> object ID. Set environment variables once you have them:
 
 ```bash
-# Example (replace with your own IDs)
-export USDC_PACKAGE=0xbca409c719d46e966ea3fe4e9fe10e81254a6f803c03771f84e67cb73c3f0a3a
+# Example (replace with your own IDs or derive from your publish output JSON)
+export USDC_PACKAGE=0xYOUR_USDC_PACKAGE_ID
 export TREASURY_CAP=0xYOUR_TREASURY_CAP_ID
 export CLOCK=0x6
 ```
@@ -194,14 +194,16 @@ sui client call \
   --gas-budget 10000000
 ```
 
-## Key Object IDs (Devnet)
+## Avoid hardcoding Object IDs
 
-If you're using the current devnet USDC deployment (as in `frontend/src/config.ts`):
+Always derive IDs from your own publish output JSON (captured with `--json | tee <file>`). Use the `jq` snippets shown above to extract:
 
-- **USDC Package ID**: `0xbca409c719d46e966ea3fe4e9fe10e81254a6f803c03771f84e67cb73c3f0a3a`
-- **Treasury Object ID**: `0x3861bddb0fdcc9e783c41d774071ce45684d1e7b118f4be06062bb3c9e44e466`
-- **TreasuryCap ID**: `<fill with your TreasuryCap<USDC> object id>`
-- **Clock (Framework singleton)**: `0x6`
+- USDC package ID
+- Treasury object ID (if applicable)
+- TreasuryCap<USDC> object ID
+- Faucet package ID and Faucet object ID after initialization
+
+Note: The Sui framework Clock is a shared object at `0x6`.
 
 ### Tutorial: Find your TreasuryCap<USDC> ID
 
@@ -228,7 +230,7 @@ export TREASURY_CAP=0xYOUR_TREASURY_CAP_ID
 If you know the USDC package ID and you control the cap, search your address for a `TreasuryCap<USDC>`:
 
 ```bash
-export USDC_PACKAGE=0xbca409c719d46e966ea3fe4e9fe10e81254a6f803c03771f84e67cb73c3f0a3a
+export USDC_PACKAGE=0xYOUR_USDC_PACKAGE_ID
 sui client objects --address $(sui client active-address) --json \
   | jq -r --arg PKG "$USDC_PACKAGE" \
     '.data[] | select(.type | test("TreasuryCap<" + $PKG + "::usdc::USDC>")) | .objectId'
@@ -239,7 +241,7 @@ sui client objects --address $(sui client active-address) --json \
 If you have the Treasury object ID, you can inspect its dynamic fields to locate the `TreasuryCap` entry:
 
 ```bash
-export TREASURY=0x3861bddb0fdcc9e783c41d774071ce45684d1e7b118f4be06062bb3c9e44e466
+export TREASURY=0xYOUR_TREASURY_OBJECT_ID
 sui client dynamic-fields --object-id $TREASURY --json \
   | jq -r '.data[] | select(.name.type | contains("TreasuryCapKey"))'
 
@@ -306,10 +308,10 @@ sui client objects --address $(sui client active-address) --json \
 Once you have `USDC_PACKAGE`, `TREASURY` and an address-owned `TREASURY_CAP`, proceed to initialize the faucet as shown above.
 
 ```bash
-# IDs from current devnet config (update as needed)
-export USDC_PACKAGE=0xbca409c719d46e966ea3fe4e9fe10e81254a6f803c03771f84e67cb73c3f0a3a
-export TREASURY=0x3861bddb0fdcc9e783c41d774071ce45684d1e7b118f4be06062bb3c9e44e466
-export TREASURY_CAP=0xYOUR_TREASURY_CAP_ID
+# Load IDs from your USDC publish output (devnet-usdc.json)
+export USDC_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' devnet-usdc.json)
+export TREASURY=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType | test("::treasury::Treasury<.*::usdc::USDC>"))) | .objectId' devnet-usdc.json)
+export TREASURY_CAP=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType | test("0x2::coin::TreasuryCap<.*::usdc::USDC>"))) | .objectId' devnet-usdc.json)
 export CLOCK=0x6                    # Clock shared object
 
 # Faucet deployment artifacts (replace with your deployed values; must start with 0x)
@@ -396,7 +398,7 @@ After obtaining USDC from the faucet, you can test Protocol interactions:
 
 ```bash
 # Find your TreasuryCap<USDC> (replace USDC package below)
-USDC_PACKAGE=0xbca409c719d46e966ea3fe4e9fe10e81254a6f803c03771f84e67cb73c3f0a3a
+export USDC_PACKAGE=0xYOUR_USDC_PACKAGE_ID
 sui client objects --address $(sui client active-address) --json \
   | jq -r --arg PKG "$USDC_PACKAGE" '.data[] | select(.type|test("TreasuryCap<" + $PKG + "::usdc::USDC>")) | .objectId'
 
