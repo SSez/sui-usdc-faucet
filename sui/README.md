@@ -18,6 +18,22 @@ This faucet allows users to request USDC tokens with built-in rate limiting to p
 
 Follow these steps if you’re new to Sui and want an end-to-end setup on devnet: build USDC, deploy the faucet, and mint yourself test USDC.
 
+TL;DR — one-command automation (if your USDC has devnet_helper)
+
+```bash
+# From this repo's sui/ folder and with these files in the CURRENT directory:
+#   ./devnet-usdc.json   (USDC publish output)
+#   ./publish.out.json   (faucet publish output)
+#   ./init.out.json      (faucet init output; created by script if TRY_INIT=1 and cap is AddressOwner)
+
+TRY_GRANT=1 TRY_INIT=1 ./discover.sh && source ./discover.env
+```
+
+What this does:
+- If your USDC exposes `devnet_helper::grant_treasury_cap_to_recipient`, it grants the TreasuryCap to your wallet (AddressOwner).
+- If `FAUCET_PACKAGE` is known, it initializes the Faucet and writes `init.out.json`.
+- It writes everything needed for the backend into `./discover.env`: `USDC_PACKAGE`, `TREASURY`, `TREASURY_CAP`, `TREASURY_CAP_OWNER_KIND`, `FAUCET_PACKAGE`, `FAUCET_ID`, `FULLNODE_URL`, `CLOCK`.
+
 1) Install tools and select devnet
 
 ```bash
@@ -45,6 +61,15 @@ export TREASURY=$(jq -r '.objectChanges[] | select(.type=="created" and (.object
 export TREASURY_CAP=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType | test("0x2::coin::TreasuryCap<.*::usdc::USDC>"))) | .objectId' devnet-usdc.json)
 echo "USDC_PACKAGE=$USDC_PACKAGE" && echo "TREASURY=$TREASURY" && echo "TREASURY_CAP=$TREASURY_CAP"
 
+
+sui client publish --gas-budget 500000000 --with-unpublished-dependencies --json | tee publish.out.json
+
+
+export FAUCET_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' publish.out.json)
+echo "FAUCET_PACKAGE=$FAUCET_PACKAGE"
+
+export CLOCK=0x6
+
 # If TREASURY_CAP is not owned by your address, you may need to issue/transfer it
 # (function name can vary by version; see README section below for details)
 
@@ -58,13 +83,13 @@ Important:
 sui client object $TREASURY_CAP --json | jq '.data.owner'
 
 ## If it shows ObjectOwner
-You must transfer/issue a `TreasuryCap<USDC>` to your wallet. Do one of the following:
+You must transfer/issue a `TreasuryCap<USDC>` to your wallet.
 
-- Option 1 (most common): your USDC package already exposes a function in a module like `treasury` that grants/transfers the cap. Discover it and call it (instructions below).
-- Option 2: switch to a Circle USDC build that exposes such a function.
-- Option 3: fork your USDC for devnet and add a helper that transfers a cap to a recipient (admin/test-only helper).
+- Option 1: Your USDC already exposes a transfer function (e.g. in `treasury`). Use the Advanced discovery below to find and call it.
+- Option 2: Use a Circle USDC build that exposes such a function.
+- Option 3 (recommended for devnet): Use your devnet-only helper (`devnet_helper`) to grant the cap to your wallet (see 2b-alt). Then continue.
 
-### Discover the function (recommended via JSON-RPC)
+### Advanced: Discover a cap function via JSON-RPC (only if you don’t use devnet_helper)
 # Or use Explorer: https://suiexplorer.com/object/USDC_PACKAGE?network=devnet
 # Replace USDC_PACKAGE with your value; look for functions that issue/transfer a TreasuryCap to a recipient.
 # 1) List all modules in your USDC package
@@ -110,75 +135,53 @@ sui client object $TREASURY_CAP --json | jq '.data.owner'
 echo "TREASURY_CAP=$TREASURY_CAP"
 ```
 
-2c) Helper script — auto-discover and export MODULE/FUNCTION
+2b-alt) If your USDC fork includes `devnet_helper` (recommended on devnet)
+
+If you added a devnet-only helper to your Circle USDC package that can grant the `TreasuryCap<USDC>` to a recipient, call it once to move the cap to your wallet:
 
 ```bash
-# Optional: set path to your USDC publish JSON (defaults to sui/devnet-usdc.json)
-JSON_PATH=${JSON_PATH:-sui/devnet-usdc.json}
-
-# 0) Derive IDs from your publish JSON
-export USDC_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' "$JSON_PATH")
-export TREASURY=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType | test("::treasury::Treasury<.*::usdc::USDC>"))) | .objectId' "$JSON_PATH")
-export TREASURY_CAP=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType | test("0x2::coin::TreasuryCap<.*::usdc::USDC>"))) | .objectId' "$JSON_PATH")
-
-echo "USDC_PACKAGE=$USDC_PACKAGE"
-echo "TREASURY=$TREASURY"
-echo "TREASURY_CAP=$TREASURY_CAP"
-
-# 1) Ownership check
-OWNER_KIND=$(sui client object "$TREASURY_CAP" --json | jq -r '(.data.owner // .owner) | keys[0]')
-echo "TREASURY_CAP owner kind: $OWNER_KIND"
-
-# 2) Discover modules and cap-related functions
-MODULES=$(curl -s -X POST https://fullnode.devnet.sui.io:443 \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"sui_getNormalizedMoveModulesByPackage","params":["'"$USDC_PACKAGE"'"]}' \
-  | jq -r '.result | keys[]')
-
-FOUND_MODULE=""
-FOUND_FUNC=""
-for M in $MODULES; do
-  FUNCS=$(curl -s -X POST https://fullnode.devnet.sui.io:443 \
-    -H 'Content-Type: application/json' \
-    -d '{"jsonrpc":"2.0","id":1,"method":"sui_getNormalizedMoveModule","params":["'"$USDC_PACKAGE"'","'"$M"'"]}' \
-    | jq -r '.result.exposedFunctions
-             | to_entries[]
-             | select((.key | test("cap|issue|transfer|release|grant"; "i")) or ((.value.parameters|tostring) | test("TreasuryCap|USDC"; "i")))
-             | .key' | sort -u)
-
-  if [ -n "$FUNCS" ]; then
-    echo "== Module: $M =="
-    echo "$FUNCS" | sed 's/^/  - /'
-    COUNT=$(echo "$FUNCS" | wc -l | tr -d ' ')
-    if [ "$COUNT" = "1" ] && [ -z "$FOUND_MODULE" ]; then
-      FOUND_MODULE="$M"
-      FOUND_FUNC="$FUNCS"
-    fi
-  fi
-done
-
-# 3) Export MODULE/FUNCTION if a unique candidate was found; otherwise print guidance
-if [ -n "$FOUND_MODULE" ] && [ -n "$FOUND_FUNC" ]; then
-  export MODULE="$FOUND_MODULE"
-  export FUNCTION="$FOUND_FUNC"
-  echo "export MODULE=$MODULE"
-  echo "export FUNCTION=$FUNCTION"
-  echo "\nCall example:"
-  cat << EOF
+# Grant the TreasuryCap<USDC> to your active address
 sui client call \
   --package $USDC_PACKAGE \
-  --module $MODULE \
-  --function $FUNCTION \
+  --module devnet_helper \
+  --function grant_treasury_cap_to_recipient \
   --args $TREASURY $(sui client active-address) \
-  --type-args $USDC_PACKAGE::usdc::USDC \
   --gas-budget 50000000
-EOF
-else
-  echo "No unique cap-issuance function found. Manually set, if applicable:"
-  echo "  export MODULE=<module_name>"
-  echo "  export FUNCTION=<function_name>"
-  echo "If none exists in your USDC package, use a Circle build that exposes it or fork for devnet and add a helper."
-fi
+
+# Re-discover a now address-owned cap and verify
+export TREASURY_CAP=$(sui client objects $(sui client active-address) --json \
+  | jq -r --arg PKG "$USDC_PACKAGE" '(.data // .)[] | select(.type | test("TreasuryCap<" + $PKG + "::usdc::USDC>")) | .objectId' \
+  | head -n1)
+
+sui client object $TREASURY_CAP --json | jq '.data.owner'
+```
+
+2c) Use the helper script to automate (supports `devnet_helper`)
+
+```bash
+# From this repo's sui/ folder. By default it reads files in the CURRENT directory:
+#   - ./devnet-usdc.json   (USDC publish)
+#   - ./publish.out.json   (faucet publish)
+#   - ./init.out.json      (faucet init; created if TRY_INIT=1 and cap is AddressOwner)
+# It writes ./discover.env with all exports for backend/.env.
+
+# Basic (no arguments, current directory files)
+./discover.sh
+
+# Optional flags:
+# - TRY_GRANT=1: If TREASURY_CAP is ObjectOwner and your USDC exposes
+#   devnet_helper::grant_treasury_cap_to_recipient, the script calls it to
+#   grant the cap to your wallet, then refreshes TREASURY_CAP and owner.
+# - TRY_INIT=1: If TREASURY_CAP is AddressOwner and FAUCET_PACKAGE is known,
+#   the script initializes the Faucet and writes ./init.out.json.
+
+TRY_GRANT=1 TRY_INIT=1 ./discover.sh
+
+# Or pass explicit paths (absolute or relative)
+TRY_GRANT=1 TRY_INIT=1 ./discover.sh ./devnet-usdc.json ./publish.out.json ./init.out.json
+
+# Load all exports into your shell for convenience
+source ./discover.env
 ```
 
 3) Build and publish the USDC Faucet

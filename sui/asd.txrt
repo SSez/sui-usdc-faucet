@@ -1,0 +1,62 @@
+## Grant the TreasuryCap<USDC> to your wallet
+sui client call \
+  --package "$USDC_PACKAGE" \
+  --module devnet_helper \
+  --function grant_treasury_cap_to_recipient \
+  --args "$TREASURY" "$(sui client active-address)" \
+  --gas-budget 50000000
+
+# Snapshot your owned objects
+sui client objects "$(sui client active-address)" --json | tee address-objects.out.json
+
+# Extract a matching TreasuryCap<USDC> for your USDC package
+export TREASURY_CAP=$(
+  jq -r --arg PKG "$USDC_PACKAGE" '
+    (if type=="array" then .[] else . end)      # top-level may be an array
+    | (.data // .)                               # per-item payload is under .data (1.56) or at root (1.55)
+    | select(
+        (.type // .content?.type)
+        | test("^0x2::coin::TreasuryCap<" + $PKG + "::usdc::USDC>$")
+      )
+    | .objectId
+  ' address-objects.out.json \
+  | head -n1
+)
+echo "TREASURY_CAP=$TREASURY_CAP"
+
+# Owner should be AddressOwner before calling init_faucet
+sui client object "$TREASURY_CAP" --json \
+  | jq -r '
+      (.data // .) as $d
+      | "type=" + (($d.type // $d.content?.type // "unknown")|tostring),
+        "owner=" + (
+          if ($d.owner // empty) != null then
+            (if ($d.owner|type)=="object" then ($d.owner|keys[0]) else ($d.owner|tostring) end)
+          else
+            "unknown"
+          end
+        )
+    '
+
+
+# Show all TreasuryCaps you own and their USDC package IDs
+jq -r '
+  (if type=="array" then .[] else . end)
+  | (.data // .)
+  | select((.type // .content?.type) | test("^0x2::coin::TreasuryCap<0x[0-9a-f]+::usdc::USDC>$"))
+  | (.objectId) as $id
+  | ((.type // .content.type) | capture("^0x2::coin::TreasuryCap<(?<pkg>0x[0-9a-f]+)::usdc::USDC>$").pkg) as $pkg
+  | "CAP=" + $id + "  USDC_PACKAGE=" + $pkg
+' address-objects.out.json
+
+
+sui client call \
+  --package "$FAUCET_PACKAGE" \
+  --module faucet \
+  --function init_faucet \
+  --args "$TREASURY_CAP" \
+  --gas-budget 10000000 \
+  --json | tee init.out.json
+
+export FAUCET_ID=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|endswith("::faucet::Faucet"))) | .objectId' init.out.json)
+echo "FAUCET_ID=$FAUCET_ID"

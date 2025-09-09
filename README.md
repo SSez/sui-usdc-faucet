@@ -1,4 +1,4 @@
-# Sui USDC Faucet — Full Stack (Server-Signed)
+# Sui USDC Faucet — Full Stack
 
 This repository lets you deploy your own USDC (Circle reference), publish a Faucet smart contract on Sui devnet, and run a simple web app where users can request test USDC by typing their address — no wallet or CLI required in the browser. The backend holds a signer key and submits transactions on behalf of users.
 
@@ -29,7 +29,7 @@ You will end with two IDs needed by the backend:
 - `FAUCET_PACKAGE` — from `publish.out.json` where `.objectChanges[].type == "published"` → `.packageId`
 - `FAUCET_ID` — from `init.out.json` where `.objectChanges[].type == "created"` and `.objectType` ends with `::faucet::Faucet` → `.objectId`
 
-3) Backend (server-signed)
+3) Backend
 
 - See `backend/README.md`. Create `backend/.env`:
   - `PORT=8787`
