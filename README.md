@@ -49,11 +49,11 @@ echo "USDC_PACKAGE=$USDC_PACKAGE" && echo "TREASURY=$TREASURY" && echo "TREASURY
 # (function name can vary by version; see README section below for details)
 ```
 
-3) Build and publish the Aquilo USDC Faucet
+3) Build and publish the USDC Faucet
 
 ```bash
 # In a separate terminal or after returning to this repo
-cd /home/user/Documents/git/aquilo/sui/faucet
+cd /home/user/Documents/git/sui/faucet
 
 sui move build
 
@@ -128,9 +128,6 @@ const MAX_REQUESTS_PER_PERIOD: u64 = 3;                // Max requests per perio
 ### 1. Deploy the Faucet Contract
 
 ```bash
-# Navigate to the faucet directory
-cd /path/to/aquilo/sui/faucet
-
 # Build the contract
 sui move build
 
@@ -199,7 +196,7 @@ sui client call \
 
 ## Key Object IDs (Devnet)
 
-If you're using the current Aquilo devnet USDC deployment (as in `frontend/src/config.ts`):
+If you're using the current devnet USDC deployment (as in `frontend/src/config.ts`):
 
 - **USDC Package ID**: `0xbca409c719d46e966ea3fe4e9fe10e81254a6f803c03771f84e67cb73c3f0a3a`
 - **Treasury Object ID**: `0x3861bddb0fdcc9e783c41d774071ce45684d1e7b118f4be06062bb3c9e44e466`
@@ -212,12 +209,12 @@ You can discover your `TreasuryCap<USDC>` object in several ways. Pick the one t
 
 1) From your publish output JSON (fastest)
 
-If you captured the publish output (e.g., `sui/faucet/faucet.json`), you can extract the created `TreasuryCap<USDC>` ID directly:
+If you captured the publish output (e.g., `faucet.json`), you can extract the created `TreasuryCap<USDC>` ID directly:
 
 ```bash
 jq -r '.objectChanges[]
   | select(.type=="created" and (.objectType | test("0x2::coin::TreasuryCap<.*::usdc::USDC>")))
-  | .objectId' /home/user/Documents/git/aquilo/sui/faucet/faucet.json
+  | .objectId' faucet.json
 ```
 
 This prints the `TREASURY_CAP` object ID. Set it for later steps:
@@ -378,11 +375,11 @@ public struct FaucetRequest has copy, drop {
 4. **TreasuryCap Security**: The TreasuryCap<USDC> should be securely stored (held by the Faucet) and not leaked
 5. **USDC Integration**: Ensure you are interacting with the correct USDC package on your network
 
-## Testing with Aquilo Protocol
+## Testing
 
-After obtaining USDC from the faucet, you can test Aquilo Protocol interactions:
+After obtaining USDC from the faucet, you can test Protocol interactions:
 
-1. **Deposit to Treasury**: Use the obtained USDC to deposit into Aquilo's account system
+1. **Deposit to Treasury**: Use the obtained USDC to deposit
 2. **Open Positions**: Use the deposited collateral to open leveraged positions
 3. **Market Interactions**: Test various market operations with real USDC collateral
 
@@ -415,7 +412,3 @@ When modifying the faucet:
 2. Test thoroughly on devnet before mainnet deployment
 3. Ensure proper error handling and event logging
 4. Update documentation for any new features
-
-## License
-
-This faucet contract is part of the Aquilo Protocol and follows the same licensing terms.
