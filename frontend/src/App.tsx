@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useAppStore } from './store.ts';
-import { API_BASE } from './config';
 
 function shortDigest(d: string) {
   return d.length > 12 ? `${d.slice(0, 8)}…${d.slice(-6)}` : d;
@@ -11,49 +10,22 @@ function isHexAddress(s: string) {
 }
 
 export default function App() {
-  const { amount, setField } = useAppStore();
+  const {
+    amount,
+    recipient,
+    busy,
+    txDigest,
+    error,
+    lastSent,
+    setField,
+    setRecipient,
+    requestUSDC
+  } = useAppStore();
 
-  const [recipient, setRecipient] = useState<string>('');
   const canRequest = useMemo(
     () => !!(recipient && Number(amount) > 0),
     [recipient, amount]
   );
-
-  const [busy, setBusy] = useState(false);
-  const [txDigest, setTxDigest] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [lastSent, setLastSent] = useState<{ recipient: string; amount: number } | null>(null);
-
-  async function onRequest() {
-    setBusy(true);
-    setTxDigest(null);
-    setError(null);
-    try {
-      const amt = Math.floor(Number(amount) * 1_000_000);
-      const res = await fetch(`${API_BASE}/api/request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipient, amount: amt })
-      });
-      if (!res.ok) {
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const j = await res.json();
-          throw new Error(j?.error || j?.message || `Request failed with ${res.status}`);
-        }
-        const msg = await res.text();
-        throw new Error(msg || `Request failed with ${res.status}`);
-      }
-      const data = await res.json();
-      const digest = data.digest || data.txDigest || null;
-      setTxDigest(digest);
-      setLastSent({ recipient, amount: Number(amount) });
-    } catch (err: any) {
-      setError(err?.message ?? String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
@@ -89,7 +61,7 @@ export default function App() {
                 <button
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 w-full"
                   disabled={!canRequest || busy || !isHexAddress(recipient)}
-                  onClick={onRequest}
+                  onClick={requestUSDC}
                 >
                   {busy ? 'Requesting…' : 'Request USDC'}
                 </button>
@@ -99,11 +71,27 @@ export default function App() {
               <div className="mt-4 rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-900 dark:border-green-700/40 dark:bg-green-900/30 dark:text-green-200">
                 <div className="font-medium">Success</div>
                 <div>
-                  Sent <strong>{lastSent.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}</strong> USDC to
-                  <span className="ml-1 font-mono">{recipient.slice(0, 8)}…{recipient.slice(-6)}</span>
+                  Sent{' '}
+                  <strong>
+                    {lastSent.amount.toLocaleString(undefined, {
+                      maximumFractionDigits: 6
+                    })}
+                  </strong>{' '}
+                  USDC to
+                  <span className="ml-1 font-mono">
+                    {recipient.slice(0, 8)}…{recipient.slice(-6)}
+                  </span>
                 </div>
                 <div>
-                  Tx: <a className="underline" href={`https://suiexplorer.com/txblock/${txDigest}?network=devnet`} target="_blank" rel="noreferrer">{shortDigest(txDigest)}</a>
+                  Tx:{' '}
+                  <a
+                    className="underline"
+                    href={`https://suiexplorer.com/txblock/${txDigest}?network=devnet`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {shortDigest(txDigest)}
+                  </a>
                 </div>
               </div>
             )}
