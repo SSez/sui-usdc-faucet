@@ -1,0 +1,56 @@
+/home/user/Downloads/sui-stuff/devnet/sui
+
+sui move build
+
+# publish USDC along with local stablecoin (no pinned addresses)
+sui client publish --gas-budget 300000000 --with-unpublished-dependencies --json | tee usdc.out.json
+
+export USDC_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' usdc.out.json)
+export TREASURY=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|test("::treasury::Treasury<.*::usdc::USDC>"))) | .objectId' usdc.out.json)
+echo "USDC_PACKAGE=$USDC_PACKAGE"
+echo "TREASURY=$TREASURY"
+
+USDC_PACKAGE=0xf0c02b2bd844c5ce008e6238f01104d9da198f6a74691450c81ac08fb9a67fdf
+TREASURY=0xf840491a3bea66202d97dc12a70fa55ef4af12f67faaea17dc26f440935f6eb5
+
+# from packages/stablecoin
+sui move build
+/home/user/Downloads/sui-stuff/devnet/sui client publish --gas-budget 300000000 --json | tee stablecoin.out.json
+export STABLECOIN_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' stablecoin.out.json)
+echo "STABLECOIN_PACKAGE=$STABLECOIN_PACKAGE"
+
+STABLECOIN_PACKAGE=0xb97a018ae920aeb5028b927116f20cb081212e3f78fa33a611606e376bcb7978
+
+# Clean and publish USDC WITHOUT --with-unpublished-dependencies:
+rm -f Move.lock && rm -rf build
+sui move build
+sui client publish --gas-budget 300000000 --json | tee usdc.out.json
+
+#Derive the correct stablecoin package from your Treasury’s type:
+export STABLECOIN_PACKAGE=$(sui client object "$TREASURY" --json | jq -r '(.data.type // .type) | split("::")[0]')
+export CLOCK=0x6
+
+# Create faucet:
+sui client call \
+  --package "$STABLECOIN_PACKAGE" \
+  --module faucet \
+  --function create \
+  --type-args "$USDC_PACKAGE::usdc::USDC" \
+  --args "$TREASURY" \
+  --gas-budget 10000000 \
+  --json | tee faucet.create.out.json
+
+export FAUCET_ID=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|test("::faucet::Faucet<.*::usdc::USDC>"))) | .objectId' faucet.create.out.json)
+echo "FAUCET_ID=$FAUCET_ID"
+
+FAUCET_ID=0xbd61dcdfbe587df5d96dc72a4e9ca296f344e32b74bf5842c47a6c10bfe1c762
+
+
+Request (50 USDC = 50000000):
+sui client call \
+  --package "$STABLECOIN_PACKAGE" \
+  --module faucet \
+  --function request \
+  --type-args "$USDC_PACKAGE::usdc::USDC" \
+  --args "$FAUCET_ID" "$TREASURY" 50000000 "$CLOCK" \
+  --gas-budget 10000000

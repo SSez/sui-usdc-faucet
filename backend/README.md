@@ -10,15 +10,33 @@ Express server that signs and submits Sui transactions to mint USDC via your Fau
 
 ## Environment
 
-Create `.env` in this folder (see `.env.example`):
+Create `.env` in this folder (see `.env.example`). You can run in one of two modes:
+
+1) Stablecoin mode (recommended; generic faucet in Circle stablecoin package)
 
 ```
 PORT=8787
 FULLNODE_URL=https://fullnode.devnet.sui.io:443
+CLOCK=0x6
+FAUCET_ID=<objectId from faucet.create.out.json>
+STABLECOIN_PACKAGE=<packageId from packages/stablecoin publish>
+USDC_PACKAGE=<packageId from packages/usdc publish>
+TREASURY=<objectId of stablecoin::treasury::Treasury<USDC>>
+# SUI private key (see below for formats)
+SUI_PRIVATE_KEY=
+```
+
+2) Legacy mode (non-generic faucet that mints via TreasuryCap<USDC>)
+
+```
+PORT=8787
+FULLNODE_URL=https://fullnode.devnet.sui.io:443
+CLOCK=0x6
 FAUCET_PACKAGE=<packageId from publish.out.json>
 FAUCET_ID=<objectId from init.out.json>
-CLOCK=0x6
-SUI_PRIVATE_KEY=0x<ed25519 secret hex>
+TREASURY_CAP=<objectId of 0x2::coin::TreasuryCap<...::usdc::USDC>>
+# SUI private key (see below for formats)
+SUI_PRIVATE_KEY=
 ```
 
 Populate FAUCET_PACKAGE and FAUCET_ID from your JSON outputs:
@@ -37,8 +55,11 @@ echo "FAUCET_ID=$FAUCET_ID"
 Then paste those values into `.env` accordingly.
 
 About `SUI_PRIVATE_KEY`:
-- Hex-encoded Ed25519 secret (32 or 64 bytes in hex). Do NOT commit this file.
-- The corresponding address must have devnet SUI for gas.
+- Accepted formats:
+  - `suiprivkey1...` (bech32)
+  - `ed25519:<base64>` (Sui export)
+  - hex: 32 or 64 bytes (with or without `0x`)
+- Do NOT commit `.env`. The key’s address must have devnet SUI for gas.
 
 ## Install & Run (dev)
 
