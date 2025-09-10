@@ -4,7 +4,7 @@ This repository lets you deploy your own USDC (Circle reference), publish a Fauc
 
 ## Repository Structure
 
-- `sui/` — Move package for the Faucet. Adds `request_tokens_for(recipient, amount, clock)` for server-signed requests.
+- `sui/stablecoin-sui/` — Circle stablecoin reference with a generic `faucet` module under `packages/stablecoin/sources/faucet.move`.
 - `backend/` — Express server that signs `request_tokens_for` and submits to Sui.
 - `frontend/` — Vite + React + Tailwind app that collects recipient and amount, then calls the backend.
 
@@ -19,25 +19,31 @@ Each subfolder has its own README with setup details.
 
 2) On-chain setup (USDC + Faucet)
 
-- Follow the detailed steps in `sui/README.md` to:
-  - Publish USDC (Circle reference) on devnet and obtain an AddressOwner `TreasuryCap<USDC>`
-  - Build, publish (or re-publish) this Faucet package
-  - Initialize the Faucet with your `TreasuryCap<USDC>`
+- Follow the detailed steps in `sui/stablecoin-sui/README.md` to:
+  - Publish USDC (Circle reference) on devnet with `--with-unpublished-dependencies`
+  - Capture `USDC_PACKAGE` and `TREASURY`
+  - Derive `STABLECOIN_PACKAGE` from the `TREASURY` type (guarantees matching addresses)
+  - Create `Faucet<USDC>` using `stablecoin::faucet::create<T>`
 
-You will end with two IDs needed by the backend:
+You will end with the IDs needed by the backend:
 
-- `FAUCET_PACKAGE` — from `publish.out.json` where `.objectChanges[].type == "published"` → `.packageId`
-- `FAUCET_ID` — from `init.out.json` where `.objectChanges[].type == "created"` and `.objectType` ends with `::faucet::Faucet` → `.objectId`
+- `STABLECOIN_PACKAGE` — derived from `TREASURY` type
+- `USDC_PACKAGE` — from `usdc.out.json` (same as `STABLECOIN_PACKAGE` when published with `--with-unpublished-dependencies`)
+- `TREASURY` — `stablecoin::treasury::Treasury<USDC>` object id
+- `FAUCET_ID` — created `stablecoin::faucet::Faucet<USDC>` object id
 
 3) Backend
 
 - See `backend/README.md`. Create `backend/.env`:
   - `PORT=8787`
   - `FULLNODE_URL=https://fullnode.devnet.sui.io:443`
-  - `FAUCET_PACKAGE=<packageId from publish.out.json>`
-  - `FAUCET_ID=<objectId from init.out.json>`
   - `CLOCK=0x6`
-  - `SUI_PRIVATE_KEY=0x<ed25519 secret hex>` (the server signer; must have SUI for gas)
+  - `FAUCET_ID=<objectId from faucet.create.out.json>`
+  - `STABLECOIN_PACKAGE=<derived from Treasury type>`
+  - `USDC_PACKAGE=<from usdc.out.json>`
+  - `TREASURY=<stablecoin::treasury::Treasury<USDC> object id>`
+  - `CLOCK=0x6`
+  - `SUI_PRIVATE_KEY=suiprivkey1... | ed25519:<base64> | 0xHEX` (server signer; must have SUI for gas)
 - Start: `npm install && npm run dev` (in `backend/`).
 
 4) Frontend
@@ -48,12 +54,13 @@ You will end with two IDs needed by the backend:
 
 ## Notes
 
-- Do not use the public devnet USDC package to initialize your faucet — you won’t own its `TreasuryCap<USDC>`.
-- Initialize with an AddressOwner `TreasuryCap<USDC>` only.
+- Do not transfer the `TreasuryCap<USDC>` out of the `Treasury<USDC>`; the faucet uses a devnet-only mint path that requires the cap to remain inside the treasury.
 - The backend signer pays gas. Secure keys and rate-limit the endpoint before public use.
 
 ## READMEs
 
 - `frontend/README.md` — How to run and customize the web app
+- `backend/README.md` — Environment, API, and deployment notes
+- `sui/stablecoin-sui/README.md` — End-to-end USDC + Faucet setup on devnet
 - `backend/README.md` — Environment, keys, and API usage
 - `sui/README.md` — Smart contract details and CLI snippets

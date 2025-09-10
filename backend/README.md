@@ -1,58 +1,28 @@
 # Backend (Server-Signed Faucet)
 
-Express server that signs and submits Sui transactions to mint USDC via your Faucet smart contract. It calls `faucet::request_tokens_for(faucet, recipient, amount, clock)` on devnet.
+Express server that signs and submits Sui transactions to mint USDC via your Faucet smart contract. It calls `stablecoin::faucet::request_for<T>` on devnet with `T = usdc::USDC`.
 
 ## Requirements
 
 - Node 20+
 - A funded Sui account (this key pays gas)
-- On-chain faucet deployed and initialized (see `../sui/README.md`)
+- On-chain faucet deployed and initialized (see `../sui/stablecoin-sui/README.md`)
 
 ## Environment
 
-Create `.env` in this folder (see `.env.example`). You can run in one of two modes:
-
-1) Stablecoin mode (recommended; generic faucet in Circle stablecoin package)
+Create `.env` in this folder (see `.env.example`). Stablecoin-only mode (recommended):
 
 ```
 PORT=8787
 FULLNODE_URL=https://fullnode.devnet.sui.io:443
 CLOCK=0x6
 FAUCET_ID=<objectId from faucet.create.out.json>
-STABLECOIN_PACKAGE=<packageId from packages/stablecoin publish>
-USDC_PACKAGE=<packageId from packages/usdc publish>
+STABLECOIN_PACKAGE=<derived from Treasury type>
+USDC_PACKAGE=<from usdc.out.json>
 TREASURY=<objectId of stablecoin::treasury::Treasury<USDC>>
 # SUI private key (see below for formats)
 SUI_PRIVATE_KEY=
 ```
-
-2) Legacy mode (non-generic faucet that mints via TreasuryCap<USDC>)
-
-```
-PORT=8787
-FULLNODE_URL=https://fullnode.devnet.sui.io:443
-CLOCK=0x6
-FAUCET_PACKAGE=<packageId from publish.out.json>
-FAUCET_ID=<objectId from init.out.json>
-TREASURY_CAP=<objectId of 0x2::coin::TreasuryCap<...::usdc::USDC>>
-# SUI private key (see below for formats)
-SUI_PRIVATE_KEY=
-```
-
-Populate FAUCET_PACKAGE and FAUCET_ID from your JSON outputs:
-
-```bash
-# From your faucet publish (ran in repo root):
-export FAUCET_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' publish.out.json)
-
-# From your faucet init:
-export FAUCET_ID=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|endswith("::faucet::Faucet"))) | .objectId' init.out.json)
-
-echo "FAUCET_PACKAGE=$FAUCET_PACKAGE"
-echo "FAUCET_ID=$FAUCET_ID"
-```
-
-Then paste those values into `.env` accordingly.
 
 About `SUI_PRIVATE_KEY`:
 - Accepted formats:
@@ -65,40 +35,37 @@ About `SUI_PRIVATE_KEY`:
 
 ```bash
 npm install
+cp .env.example .env  # then fill values
 npm run dev
 # Backend listening on http://localhost:8787
 ```
 
 ## API
 
-POST /api/request
+POST `/api/request`
 
 Request body (JSON):
-```
+```json
 {
-  "recipient": "0x...",          // Address to receive USDC
-  "amount": 100000000              // u64 in 6 decimals (e.g., 100 USDC)
+  "recipient": "0x...",
+  "amount": 100000000
 }
 ```
+- `recipient`: address to receive USDC
+- `amount`: atomic units (USDC has 6 decimals); e.g. 100 USDC = 100_000_000
 
 Response (JSON):
+```json
+{ "digest": "<transaction digest>" }
 ```
-{ "digest": "..." }
-```
 
-Errors return HTTP 4xx/5xx with a message body.
+Errors return HTTP 4xx/5xx with a JSON `{ error: "..." }` or text message. The frontend parses both.
 
-## Security Notes
+## Notes
 
-- Protect `SUI_PRIVATE_KEY` with proper secrets management.
-- Add rate limiting and auth before public deployment.
-- Restrict CORS and allowed origins.
-# Backend (Server-Signed Faucet)
-
-Express server that signs and submits Sui transactions to mint USDC via your Faucet.
-
-## Requirements
-- Node 20+
+- All on-chain objects and type-args must come from the same package addresses (see `../sui/stablecoin-sui/README.md`).
+- Do not transfer the `TreasuryCap<USDC>` out of the `Treasury<USDC>`; the faucet’s devnet path requires the cap to remain inside the treasury.
+- Add rate limiting and auth before public use. Restrict CORS to trusted origins.
 - Funded Sui account whose private key is set in env (pays gas)
 
 ## Installation & Run

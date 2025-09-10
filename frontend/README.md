@@ -17,20 +17,20 @@ npm run dev
 
 ## Configuration
 
-Edit `src/config.ts` to set your devnet IDs:
+The frontend calls the backend at `API_BASE`.
 
-- `networkConfig["sui:devnet"].faucetPackage` — your faucet package (from `publish.out.json`)
-- `networkConfig["sui:devnet"].faucetId` — your Faucet object (from `init.out.json`)
-- `clockId` defaults to `0x6` in the UI
+- Configure via Vite env: `VITE_API_BASE=http://localhost:8787`
+- Or edit `src/config.ts` (default is `http://localhost:8787`).
 
-The app is config-driven. No wallet required. The backend must be configured with the same faucet values.
+The backend must be configured with your on-chain faucet values (see backend README).
 
 ## Usage
 
 1. Type a recipient address (0x...)
 2. Enter an amount in whole USDC (UI converts to 6 decimals)
 3. Click “Request USDC”
-4. The backend returns a transaction digest if successful
+4. On success, you will see a message like: “Success — Sent X USDC … Tx: <digest>” with a link to Sui Explorer
+5. Errors are displayed with a descriptive message returned by the backend
 
 ## Build
 
@@ -44,4 +44,4 @@ npm run build
 
 - Styles: Tailwind v4 (`src/index.css`)
 - State: minimal Zustand store (`src/store.ts`)
-- API URL: hardcoded to `http://localhost:8787/api/request` in `src/App.tsx` — change for deployment
+- API URL: `src/config.ts` (`API_BASE`)

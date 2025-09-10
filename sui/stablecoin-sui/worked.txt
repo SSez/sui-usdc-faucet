@@ -1,7 +1,5 @@
-/home/user/Downloads/sui-stuff/devnet/sui
 
 sui move build
-
 # publish USDC along with local stablecoin (no pinned addresses)
 sui client publish --gas-budget 300000000 --with-unpublished-dependencies --json | tee usdc.out.json
 
@@ -15,7 +13,7 @@ TREASURY=0xf840491a3bea66202d97dc12a70fa55ef4af12f67faaea17dc26f440935f6eb5
 
 # from packages/stablecoin
 sui move build
-/home/user/Downloads/sui-stuff/devnet/sui client publish --gas-budget 300000000 --json | tee stablecoin.out.json
+sui client publish --gas-budget 300000000 --json | tee stablecoin.out.json
 export STABLECOIN_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' stablecoin.out.json)
 echo "STABLECOIN_PACKAGE=$STABLECOIN_PACKAGE"
 
@@ -44,7 +42,6 @@ export FAUCET_ID=$(jq -r '.objectChanges[] | select(.type=="created" and (.objec
 echo "FAUCET_ID=$FAUCET_ID"
 
 FAUCET_ID=0xbd61dcdfbe587df5d96dc72a4e9ca296f344e32b74bf5842c47a6c10bfe1c762
-
 
 Request (50 USDC = 50000000):
 sui client call \

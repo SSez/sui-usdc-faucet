@@ -160,6 +160,3 @@ lerna-debug.log*
 *.sw?
 
 Move.lock
-devnet-usdc.json
-publish.out.json
-init.out.json
