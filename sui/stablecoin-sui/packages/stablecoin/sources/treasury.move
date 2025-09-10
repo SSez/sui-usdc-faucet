@@ -647,18 +647,11 @@ module stablecoin::treasury {
         });
     }
 
-    // === Devnet helper functions ===
+    // === Helper functions ===
 
-    /// [Devnet-only] Removes the TreasuryCap<T> from the Treasury<T> and transfers it to the recipient.
-    /// Intended for devnet/testing scenarios to allow bootstrap operations.
-    public entry fun devnet_transfer_treasury_cap<T>(t: &mut Treasury<T>, recipient: address, _ctx: &mut TxContext) {
-        let treasury_cap: TreasuryCap<T> = dof::remove(&mut t.id, TreasuryCapKey {});
-        transfer::public_transfer(treasury_cap, recipient);
-    }
-
-    /// [Devnet-only] Mints `amount` directly from the wrapped TreasuryCap<T> and transfers it to `recipient`.
+    /// Mints `amount` directly from the wrapped TreasuryCap<T> and transfers it to `recipient`.
     /// Skips controller/allowance checks; do not use in production.
-    public entry fun devnet_mint_and_transfer<T>(
+    public entry fun mint_and_transfer<T>(
         t: &mut Treasury<T>,
         amount: u64,
         recipient: address,

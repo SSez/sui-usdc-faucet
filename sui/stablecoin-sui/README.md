@@ -60,6 +60,13 @@ export USDC_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .pa
 export TREASURY=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|test("::treasury::Treasury<.*::usdc::USDC>"))) | .objectId' usdc.out.json)
 echo "USDC_PACKAGE=$USDC_PACKAGE" && echo "TREASURY=$TREASURY"
 ```
+
+Print USDC Contract Addresses
+```bash
+export USDC_COIN=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' usdc.out.json)
+echo "$USDC_COIN::usdc::USDC"
+```
+
 Important: Do NOT transfer the TreasuryCap<USDC> out of the Treasury. The faucet requires the TreasuryCap to remain inside the `Treasury<USDC>` object.
 
 ### 3) Derive STABLECOIN_PACKAGE from your Treasury (types must match)

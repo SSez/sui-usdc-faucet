@@ -1,19 +1,3 @@
-// Copyright 2024 Circle Internet Group, Inc. All rights reserved.
-//
-// SPDX-License-Identifier: Apache-2.0
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 module stablecoin::faucet {
     use sui::clock::{Self, Clock};
     use sui::event;
@@ -78,7 +62,7 @@ module stablecoin::faucet {
     }
 
     /// Request `amount` for the sender, rate-limited.
-    /// Devnet-only: internally calls `treasury::devnet_mint_and_transfer<T>`.
+    /// internally calls `treasury::mint_and_transfer<T>`.
     public entry fun request<T>(
         faucet: &mut Faucet<T>,
         treasury: &mut Treasury<T>,
@@ -92,7 +76,7 @@ module stablecoin::faucet {
     }
 
     /// Request `amount` to be sent to a specific `recipient`, rate-limited per sender.
-    /// Devnet-only: internally calls `treasury::devnet_mint_and_transfer<T>`.
+    /// internally calls `treasury::mint_and_transfer<T>`.
     public entry fun request_for<T>(
         faucet: &mut Faucet<T>,
         treasury: &mut Treasury<T>,
@@ -137,7 +121,7 @@ module stablecoin::faucet {
         assert!(effective_count < MAX_REQUESTS_PER_PERIOD, ERateLimitExceeded);
 
         // Devnet-only mint path from the wrapped TreasuryCap
-        treasury::devnet_mint_and_transfer<T>(treasury, amount, recipient, ctx);
+        treasury::mint_and_transfer<T>(treasury, amount, recipient, ctx);
 
         let updated_count = effective_count + 1;
 
