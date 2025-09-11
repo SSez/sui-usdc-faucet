@@ -1,4 +1,4 @@
-# Sui USDC Faucet — Full Stack
+# Sui USDC Unofficial Faucet — Full Stack
 
 This repository lets you deploy your own USDC (Circle reference), publish a Faucet smart contract on Sui devnet, and run a simple web app where users can request test USDC by typing their address — no wallet or CLI required in the browser. The backend holds a signer key and submits transactions on behalf of users.
 

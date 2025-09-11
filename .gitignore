@@ -160,3 +160,6 @@ lerna-debug.log*
 *.sw?
 
 Move.lock
+
+usdc.out.json
+faucet.out.json

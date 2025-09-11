@@ -15,7 +15,7 @@ function parseErrorMessage(error: string): string {
 }
 
 type AppState = {
-  amount: string; // in human USDC, e.g., "100"
+  amount: string;
   recipient: string;
   busy: boolean;
   txDigest: string | null;
