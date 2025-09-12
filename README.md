@@ -4,7 +4,7 @@ This repository lets you deploy your own USDC (Circle reference), publish a Fauc
 
 ## Repository Structure
 
-- `sui/stablecoin-sui/` — Circle stablecoin reference with a generic `faucet` module under `packages/stablecoin/sources/faucet.move`.
+- `stablecoin-sui/` — Circle stablecoin reference with a generic `faucet` module under `packages/stablecoin/sources/faucet.move`.
 - `backend/` — Express server that signs `request_tokens_for` and submits to Sui.
 - `frontend/` — Vite + React + Tailwind app that collects recipient and amount, then calls the backend.
 
@@ -19,7 +19,7 @@ Each subfolder has its own README with setup details.
 
 2) On-chain setup (USDC + Faucet)
 
-- Follow the detailed steps in `sui/stablecoin-sui/README.md` to:
+- Follow the detailed steps in `stablecoin-sui/README.md` to:
   - Publish USDC (Circle reference) on devnet with `--with-unpublished-dependencies`
   - Capture `USDC_PACKAGE` and `TREASURY`
   - Derive `STABLECOIN_PACKAGE` from the `TREASURY` type (guarantees matching addresses)
