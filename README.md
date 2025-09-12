@@ -54,7 +54,6 @@ You will end with the IDs needed by the backend:
 
 ## Notes
 
-- Do not transfer the `TreasuryCap<USDC>` out of the `Treasury<USDC>`; the faucet uses a devnet-only mint path that requires the cap to remain inside the treasury.
 - The backend signer pays gas. Secure keys and rate-limit the endpoint before public use.
 
 ## READMEs
