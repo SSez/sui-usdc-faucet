@@ -86,7 +86,7 @@ export default function App() {
                   Tx:{' '}
                   <a
                     className="underline"
-                    href={`https://suiexplorer.com/txblock/${txDigest}?network=devnet`}
+                    href={`https://suiscan.xyz/devnet/tx/${txDigest}`}
                     target="_blank"
                     rel="noreferrer"
                   >
