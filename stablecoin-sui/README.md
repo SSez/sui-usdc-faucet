@@ -11,16 +11,17 @@ The flow below shows USDC on devnet; adapt as needed for testnet.
 ```bash
 cd packages/usdc
 sui move build
-sui client publish --gas-budget 300000000 --with-unpublished-dependencies --json | tee ../json/usdc.out.json
+mkdir ../../json
+sui client publish --gas-budget 300000000 --with-unpublished-dependencies --json | tee ../../json/usdc.out.json
 
-export USDC_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' ../json/usdc.out.json)
-export TREASURY=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|test("::treasury::Treasury<.*::usdc::USDC>"))) | .objectId' ../json/usdc.out.json)
+export USDC_PACKAGE=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' ../../json/usdc.out.json)
+export TREASURY=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|test("::treasury::Treasury<.*::usdc::USDC>"))) | .objectId' ../../json/usdc.out.json)
 echo "USDC_PACKAGE=$USDC_PACKAGE" && echo "TREASURY=$TREASURY"
 ```
 
-Print USDC Contract Addresses
+Print USDC Contract Address
 ```bash
-export USDC_COIN=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' ../json/usdc.out.json)
+export USDC_COIN=$(jq -r '.objectChanges[] | select(.type=="published") | .packageId' ../../json/usdc.out.json)
 echo "$USDC_COIN::usdc::USDC"
 ```
 
@@ -47,9 +48,9 @@ sui client call \
   --type-args "$USDC_PACKAGE::usdc::USDC" \
   --args "$TREASURY" \
   --gas-budget 10000000 \
-  --json | tee ../json/faucet.out.json
+  --json | tee ../../json/faucet.out.json
 
-export FAUCET_ID=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|test("::faucet::Faucet<.*::usdc::USDC>"))) | .objectId' ../json/faucet.out.json)
+export FAUCET_ID=$(jq -r '.objectChanges[] | select(.type=="created" and (.objectType|test("::faucet::Faucet<.*::usdc::USDC>"))) | .objectId' ../../json/faucet.out.json)
 echo "FAUCET_ID=$FAUCET_ID"
 ```
 
