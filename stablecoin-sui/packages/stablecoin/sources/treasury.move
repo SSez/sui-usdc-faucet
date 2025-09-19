@@ -598,7 +598,7 @@ module stablecoin::treasury {
     /// additionally compatible with this package's version.
     entry fun start_migration<T>(treasury: &mut Treasury<T>, ctx: &TxContext) {
         treasury.roles.owner_role().assert_sender_is_active_role(ctx);
-        assert!(treasury.compatible_versions.size() == 1, EMigrationStarted);
+        assert!(treasury.compatible_versions.length() == 1, EMigrationStarted);
 
         let active_version = treasury.compatible_versions.keys()[0];
         assert!(active_version < version_control::current_version(), EObjectMigrated);
@@ -614,7 +614,7 @@ module stablecoin::treasury {
     /// to the previous version.
     entry fun abort_migration<T>(treasury: &mut Treasury<T>, ctx: &TxContext) {
         treasury.roles.owner_role().assert_sender_is_active_role(ctx);
-        assert!(treasury.compatible_versions.size() == 2, EMigrationNotStarted);
+        assert!(treasury.compatible_versions.length() == 2, EMigrationNotStarted);
 
         let pending_version = max(
             treasury.compatible_versions.keys()[0],
@@ -633,7 +633,7 @@ module stablecoin::treasury {
     /// only compatible with this package's version.
     entry fun complete_migration<T>(treasury: &mut Treasury<T>, ctx: &TxContext) {
         treasury.roles.owner_role().assert_sender_is_active_role(ctx);
-        assert!(treasury.compatible_versions.size() == 2, EMigrationNotStarted);
+        assert!(treasury.compatible_versions.length() == 2, EMigrationNotStarted);
 
         let (version_a, version_b) = (treasury.compatible_versions.keys()[0], treasury.compatible_versions.keys()[1]);
         let (active_version, pending_version) = (min(version_a, version_b), max(version_a, version_b));
@@ -651,7 +651,7 @@ module stablecoin::treasury {
 
     /// Mints `amount` directly from the wrapped TreasuryCap<T> and transfers it to `recipient`.
     /// Skips controller/allowance checks; do not use in production.
-    public entry fun mint_and_transfer<T>(
+    public fun mint_and_transfer<T>(
         t: &mut Treasury<T>,
         amount: u64,
         recipient: address,

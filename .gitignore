@@ -163,3 +163,5 @@ Move.lock
 
 usdc.out.json
 faucet.out.json
+stablecoin.out.json
+sui_extensions.out.json

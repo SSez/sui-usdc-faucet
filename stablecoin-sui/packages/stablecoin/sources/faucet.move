@@ -1,10 +1,7 @@
 module stablecoin::faucet {
     use sui::clock::{Self, Clock};
     use sui::event;
-    use sui::object::{Self, ID, UID};
     use sui::table::{Self, Table};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
 
     use stablecoin::treasury::{Self, Treasury};
 
@@ -18,7 +15,7 @@ module stablecoin::faucet {
     // Note: These defaults are USDC-friendly (6 decimals), but the module is generic over T.
     const MAX_REQUEST_AMOUNT: u64 = 1_000_000 /* 1M units */ * 1_000_000 /* 10^6 decimals */;
     const RATE_LIMIT_PERIOD_MS: u64 = 3_600_000; // 1 hour in ms (reduced for testing)
-    const MAX_REQUESTS_PER_PERIOD: u64 = 1000; // Increased for testing
+    const MAX_REQUESTS_PER_PERIOD: u64 = 1000;
 
     // === Objects ===
 
@@ -49,13 +46,13 @@ module stablecoin::faucet {
 
     /// Create and share a Faucet bound to the given Treasury<T>.
     /// Note: This is not a module 'init'; call this explicitly after publishing.
-    public entry fun create<T>(treasury: &Treasury<T>, ctx: &mut TxContext) {
+    public fun create<T>(treasury: &Treasury<T>, ctx: &mut TxContext) {
         let faucet = Faucet<T> {
             id: object::new(ctx),
             owner: ctx.sender(),
             treasury_id: object::id(treasury),
-            user_last_request_ms: table::new(ctx),
-            user_request_count: table::new(ctx),
+            user_last_request_ms: table::new<address, u64>(ctx),
+            user_request_count: table::new<address, u64>(ctx),
             total_distributed: 0,
         };
         transfer::public_share_object(faucet);
@@ -63,7 +60,7 @@ module stablecoin::faucet {
 
     /// Request `amount` for the sender, rate-limited.
     /// internally calls `treasury::mint_and_transfer<T>`.
-    public entry fun request<T>(
+    public fun request<T>(
         faucet: &mut Faucet<T>,
         treasury: &mut Treasury<T>,
         amount: u64,
@@ -77,7 +74,7 @@ module stablecoin::faucet {
 
     /// Request `amount` to be sent to a specific `recipient`, rate-limited per sender.
     /// internally calls `treasury::mint_and_transfer<T>`.
-    public entry fun request_for<T>(
+    public fun request_for<T>(
         faucet: &mut Faucet<T>,
         treasury: &mut Treasury<T>,
         recipient: address,
@@ -90,7 +87,7 @@ module stablecoin::faucet {
     }
 
     /// Transfer ownership of the faucet object.
-    public entry fun transfer_ownership<T>(faucet: &mut Faucet<T>, new_owner: address, ctx: &mut TxContext) {
+    public fun transfer_ownership<T>(faucet: &mut Faucet<T>, new_owner: address, ctx: &mut TxContext) {
         assert!(ctx.sender() == faucet.owner, ENotOwner);
         faucet.owner = new_owner;
     }
@@ -109,11 +106,11 @@ module stablecoin::faucet {
 
         let now = clock::timestamp_ms(clock);
 
-        let last = if (table::contains(&faucet.user_last_request_ms, ctx.sender())) {
+        let last = if (table::contains<address, u64>(&faucet.user_last_request_ms, ctx.sender())) {
             *table::borrow(&faucet.user_last_request_ms, ctx.sender())
         } else { 0 };
 
-        let count = if (table::contains(&faucet.user_request_count, ctx.sender())) {
+        let count = if (table::contains<address, u64>(&faucet.user_request_count, ctx.sender())) {
             *table::borrow(&faucet.user_request_count, ctx.sender())
         } else { 0 };
 
@@ -125,13 +122,13 @@ module stablecoin::faucet {
 
         let updated_count = effective_count + 1;
 
-        if (table::contains(&faucet.user_last_request_ms, ctx.sender())) {
+        if (table::contains<address, u64>(&faucet.user_last_request_ms, ctx.sender())) {
             *table::borrow_mut(&mut faucet.user_last_request_ms, ctx.sender()) = now;
         } else {
             table::add(&mut faucet.user_last_request_ms, ctx.sender(), now);
         };
 
-        if (table::contains(&faucet.user_request_count, ctx.sender())) {
+        if (table::contains<address, u64>(&faucet.user_request_count, ctx.sender())) {
             *table::borrow_mut(&mut faucet.user_request_count, ctx.sender()) = updated_count;
         } else {
             table::add(&mut faucet.user_request_count, ctx.sender(), updated_count);
