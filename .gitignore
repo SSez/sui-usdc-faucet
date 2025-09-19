@@ -165,3 +165,4 @@ usdc.out.json
 faucet.out.json
 stablecoin.out.json
 sui_extensions.out.json
+contract_ids.env
