@@ -159,8 +159,6 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-Move.lock
-
 usdc.out.json
 faucet.out.json
 stablecoin.out.json

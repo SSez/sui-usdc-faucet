@@ -5,7 +5,8 @@ Follows the README.md workflow to build and publish all packages:
 1. sui_extensions
 2. stablecoin
 3. usdc
-4. Create faucet
+4. Create Treasury
+5. Create faucet
 
 Extracts and saves all contract IDs to JSON files and contract_ids.env.
 """
@@ -296,9 +297,10 @@ def build_and_publish_stablecoin(script_dir, json_dir):
     
     # Publish the package
     print_progress("Publishing stablecoin package...")
-    cmd = ['sui', 'client', 'publish', '--gas-budget', GAS_BUDGET, '--with-unpublished-dependencies', '--json']
+    #cmd = ['sui', 'client', 'publish', '--gas-budget', GAS_BUDGET, '--with-unpublished-dependencies', '--json']
+    cmd = ['sui', 'client', 'publish', '--gas-budget', GAS_BUDGET, '--json']
     output = run_command(cmd, cwd=stablecoin_dir)
-    
+
     if not output:
         return None
     
@@ -345,15 +347,17 @@ def build_and_publish_package(script_dir, json_dir, package_config):
     if build_result is None:
         return (None, None) if extract_treasury else None
     
-    # Publish the package
+    # Publish the package - ALWAYS use --with-unpublished-dependencies and --json
     print_progress(f"Publishing {package_name} package...")
     cmd = ['sui', 'client', 'publish', '--gas-budget', GAS_BUDGET, '--json']
-    if needs_unpublished_deps:
-        cmd.insert(-1, '--with-unpublished-dependencies')
+    #if needs_unpublished_deps:
+    #    cmd.insert(-1, '--with-unpublished-dependencies')
     
+    print_command(f"Command: {' '.join(cmd)}")
     output = run_command(cmd, cwd=package_dir)
     
     if not output:
+        print_error(f"Failed to publish {package_name} package.")
         return (None, None) if extract_treasury else None
     
     # Save output to JSON file
@@ -374,7 +378,9 @@ def build_and_publish_package(script_dir, json_dir, package_config):
         # Extract treasury if needed
         treasury_id = None
         if extract_treasury and package_id:
-            treasury_id = extract_treasury_id(data, package_id)
+            # For USDC package, the package_id is the usdc_package we need
+            usdc_to_use = package_id if package_name == 'usdc' else None
+            treasury_id = extract_treasury_id(data, usdc_to_use)
             if treasury_id:
                 print_contract_id("TREASURY", treasury_id, "🏛️ ")
             else:
@@ -433,18 +439,13 @@ def extract_package_id(data):
             return change['packageId']
     return None
 
-
-
-
 def extract_treasury_id(data, usdc_package=None):
-    """Extract Treasury object ID using the README pattern.
-
-    Matches any created object whose type tests as "::treasury::Treasury<.*::usdc::USDC>".
-    The usdc_package parameter is optional and not required for matching.
-    """
+    """Extract Treasury object ID from created objects."""
     if not data or 'objectChanges' not in data:
         return None
-    pattern = r"::treasury::Treasury<.*::usdc::USDC>"
+
+    # Pattern for our specific Treasury type
+    pattern = rf"::treasury::Treasury<{usdc_package}::usdc::USDC>"
     
     for change in data['objectChanges']:
         if change.get('type') == 'created' and 'objectType' in change:
@@ -470,6 +471,64 @@ def extract_faucet_id(data, usdc_package):
     return None
 
 
+def create_treasury(stablecoin_package, usdc_package, owner_address, treasury_json_path):
+    """Create Treasury object using SUI client call and save output to JSON file."""
+    if not all([stablecoin_package, usdc_package, owner_address]):
+        print_error("Missing required parameters for treasury creation.")
+        return None
+
+    print_header("Creating Treasury", Colors.BRIGHT_CYAN)
+    print_info("This will create a Treasury<USDC> object with our specific USDC type.")
+
+    # Build the SUI client command
+    cmd = [
+        'sui', 'client', 'call',
+        '--package', stablecoin_package,
+        '--module', 'treasury',
+        '--function', 'create',
+        '--type-args', f'{usdc_package}::usdc::USDC',
+        '--args', f"{owner_address}",
+        '--gas-budget', GAS_BUDGET,
+        '--json'
+    ]
+
+    try:
+        print_progress("Executing SUI client call to create Treasury...")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+        # Save the output to the JSON file
+        with open(treasury_json_path, 'w') as f:
+            f.write(result.stdout)
+
+        print_success("Treasury creation completed successfully!")
+        print_file_action("Output saved", treasury_json_path)
+
+        # Parse and display the treasury ID
+        try:
+            output_data = json.loads(result.stdout)
+            treasury_id = extract_treasury_id(output_data, usdc_package)
+            if treasury_id:
+                print_contract_id("TREASURY_ID", treasury_id, "🏛️ ")
+                return treasury_id
+            else:
+                print_warning("Could not extract TREASURY_ID from the output.")
+                return None
+        except json.JSONDecodeError:
+            print_warning("Could not parse JSON output to extract TREASURY_ID.")
+            return None
+
+    except subprocess.CalledProcessError as e:
+        print_error(f"Error executing SUI client call: {e}")
+        if e.stderr:
+            print_error(f"Error output: {e.stderr}")
+        return None
+    except Exception as e:
+        print_error(f"Unexpected error: {e}")
+        return None
+
+
+
+
 def create_faucet(stablecoin_package, usdc_package, treasury_id, faucet_json_path):
     """Create faucet using SUI client call and save output to JSON file."""
     if not all([stablecoin_package, usdc_package, treasury_id]):
@@ -481,8 +540,8 @@ def create_faucet(stablecoin_package, usdc_package, treasury_id, faucet_json_pat
     print_info("This will create a shared Faucet<USDC> object.")
     
     # Ask user for confirmation
-    response = input("Do you want to proceed with creating the faucet? (y/N): ").strip().lower()
-    if response != 'y' and response != 'yes':
+    response = input("Do you want to proceed with creating the faucet? (Y/n): ").strip().lower()
+    if response.lower() != 'y' and response.lower() != 'yes':
         print_warning("Faucet creation cancelled by user.")
         return None
     
@@ -546,80 +605,6 @@ def save_config_file(config_data, output_path):
         return False
 
 
-def verify_treasury_from_objects(usdc_package):
-    """Enhanced Treasury verification with robust JSON parsing and fallbacks."""
-    print_header("Verifying Treasury from Objects", Colors.BRIGHT_CYAN)
-    print_info("Attempting to find Treasury object from SUI client objects...")
-    
-    # First try: structured JSON approach
-    cmd = ['sui', 'client', 'objects', '--json']
-    output = run_command(cmd)
-    
-    if output:
-        try:
-            import json, re
-            raw = json.loads(output)
-            # Handle multiple possible shapes
-            if isinstance(raw, dict):
-                candidates = raw.get('data') or raw.get('result') or raw.get('objects') or []
-            else:
-                candidates = raw
-            
-            treasury_regex = re.compile(r"::treasury::Treasury<.*::usdc::USDC>")
-            
-            for obj in candidates:
-                # Extract type from various shapes
-                obj_type = (
-                    obj.get('type') or
-                    obj.get('data', {}).get('type') or
-                    obj.get('content', {}).get('type') or
-                    ''
-                )
-                if obj_type and treasury_regex.search(obj_type):
-                    # Extract objectId from various shapes
-                    object_id = (
-                        obj.get('objectId') or
-                        obj.get('data', {}).get('objectId') or
-                        obj.get('reference', {}).get('objectId') or
-                        obj.get('data', {}).get('objectId', {}) if isinstance(obj.get('data', {}).get('objectId'), str) else None
-                    )
-                    if object_id:
-                        print_contract_id("Found Treasury object", object_id, "🏛️ ")
-                        return object_id
-            # If JSON parsing successful but nothing found, fall through to text approach
-        except Exception as e:
-            print_warning(f"JSON parse failed for 'sui client objects --json' output: {e}")
-    
-    # Second try: text-based approach
-    cmd = ['sui', 'client', 'objects']
-    output = run_command(cmd)
-    
-    if output:
-        # Look for Treasury objects in text output
-        lines = output.split('\n')
-        for i, line in enumerate(lines):
-            if "::treasury::Treasury<" in line and "::usdc::USDC>" in line:
-                # Look for object ID in surrounding lines
-                for j in range(max(0, i-8), min(len(lines), i+9)):
-                    if 'ObjectID' in lines[j] or 'object ID' in lines[j] or 'objectId' in lines[j]:
-                        parts = lines[j].split()
-                        for part in parts:
-                            if part.startswith('0x') and len(part) > 10:
-                                print_contract_id("Found Treasury object", part, "🏛️ ")
-                                return part
-    
-    # Final fallback: manual input
-    print_warning("Automated Treasury verification failed. Please enter Treasury ID manually.")
-    print_info("You can find it with: sui client objects | grep -i treasury")
-    
-    treasury_id = input("Enter Treasury ID (or leave blank to skip): ").strip()
-    if treasury_id:
-        return treasury_id
-    
-    print_error("Could not find Treasury object from SUI client objects.")
-    return None
-
-
 def load_existing_package_data(json_dir, package_config, usdc_package=None):
     """Load existing package data from JSON file."""
     package_name = package_config['name']
@@ -637,7 +622,7 @@ def load_existing_package_data(json_dir, package_config, usdc_package=None):
     # Always attempt to extract Treasury using the README pattern
     # This does not require usdc_package to be known in advance
     if extract_treasury and package_id:
-        treasury_id = extract_treasury_id(package_data)
+        treasury_id = extract_treasury_id(package_data, usdc_package)
     
     if package_id:
         print_contract_id(f"Loaded existing {package_name.upper()}_PACKAGE", package_id, icon)
@@ -710,13 +695,92 @@ def deploy_package_with_prompt(script_dir, json_dir, package_config, usdc_packag
         return load_existing_package_data(json_dir, package_config, usdc_package)
 
 
+def verify_usdc_data_type(usdc_package, treasury_id):
+    """Verify that USDC coins are properly recognized as USDC type, not generic Object."""
+    print_section("🔍 Verifying USDC Data Type")
+
+    if not usdc_package:
+        print_error("USDC package ID not available for verification.")
+        return False
+
+    expected_usdc_type = f"{usdc_package}::usdc::USDC"
+    print_info(f"Expected USDC type: {expected_usdc_type}")
+
+    # Check Treasury object type
+    if treasury_id:
+        print_progress("Checking Treasury object type...")
+        cmd = ['sui', 'client', 'object', treasury_id, '--json']
+        treasury_output = run_command(cmd)
+
+        if treasury_output:
+            try:
+                treasury_data = json.loads(treasury_output)
+                treasury_type = treasury_data.get('data', {}).get('type', '')
+
+                if treasury_type:
+                    print_info(f"Treasury type: {treasury_type}")
+
+                    if expected_usdc_type in treasury_type:
+                        print_success("✅ Treasury contains correct USDC type!")
+                    else:
+                        print_error(f"❌ Treasury type mismatch! Expected {expected_usdc_type} in {treasury_type}")
+                        return False
+                else:
+                    print_warning("Could not determine Treasury object type.")
+            except json.JSONDecodeError:
+                print_error("Failed to parse Treasury object JSON.")
+
+    # Check if we have any USDC coins in wallet
+    print_progress("Checking wallet for USDC coins...")
+    try:
+        address = run_command(['sui', 'client', 'active-address'], capture_output=True)
+        if address:
+            address = address.strip()
+            print_info(f"Using address: {address}")
+
+            # Query balance for the specific USDC coin type
+            cmd = ['sui', 'client', 'balance', address, '--coin-type', expected_usdc_type, '--json']
+            balance_output = run_command(cmd)
+
+            if balance_output:
+                try:
+                    data = json.loads(balance_output)
+                    total = 0
+                    if isinstance(data, dict):
+                        total = int(data.get('totalBalance') or data.get('total_balance') or 0)
+                    elif isinstance(data, list):
+                        for entry in data:
+                            if isinstance(entry, dict) and (entry.get('coinType') == expected_usdc_type or entry.get('coin_type') == expected_usdc_type):
+                                total = int(entry.get('totalBalance') or entry.get('total_balance') or 0)
+                                break
+
+                    if total > 0:
+                        print_success(f"✅ Found USDC balance: {total / 1_000_000} USDC")
+                        return True
+                    else:
+                        print_info("ℹ️  No USDC balance found yet. This is normal before using the faucet.")
+                        print_info("   Try requesting USDC from the faucet to test the data type.")
+                        return True
+                except json.JSONDecodeError:
+                    print_error("Failed to parse balance JSON.")
+        else:
+            print_warning("Could not determine active address.")
+    except Exception as e:
+        print_error(f"Error checking USDC balance: {e}")
+
+    print_info("ℹ️  USDC data type verification completed.")
+    return True
+
+
 def main():
     """Main function to build and deploy all packages following README.md workflow."""
     print_header("🚀 Starting Comprehensive Build and Deployment Process", Colors.BRIGHT_CYAN)
     for i, config in enumerate(PackageConfig.get_all_configs(), 1):
         print_step(i, f"Build & Publish {config['name']}")
-    print_step(4, "Create faucet")
-    print_step(5, "Save all contract IDs")
+    print_step(4, "Create Treasury")
+    print_step(5, "Create faucet")
+    print_step(6, "Verify USDC data type")
+    print_step(7, "Save all contract IDs")
     print()
     
     # Define file paths
@@ -755,49 +819,40 @@ def main():
         else:
             package_ids[f"{package_name}_package"] = result
     
-    # Step 4: Verify Treasury (if not found)
+    # Step 4: Create Treasury
     if package_ids['usdc_package'] and not package_ids['treasury_id']:
-        print_section("STEP 4a: Verifying Treasury Object")
-        response = input("TREASURY not found. Do you want to search for it? (Y/n): ").strip().lower()
-        if response != 'n' and response != 'no':
-            package_ids['treasury_id'] = verify_treasury_from_objects(package_ids['usdc_package'])
+        print_section("Creating Treasury")
+        # Get owner address (use active address)
+        owner_address = run_command(['sui', 'client', 'active-address'], capture_output=True).strip()
+        treasury_path = json_dir / 'treasury.out.json'
+        package_ids['treasury_id'] = create_treasury(
+            package_ids['stablecoin_package'],
+            package_ids['usdc_package'],
+            owner_address,
+            treasury_path
+        )
+
+    # Step 5: Create Faucet
+    if package_ids['usdc_package'] and package_ids['treasury_id']:
+        faucet_path = json_dir / 'faucet.out.json'
+        package_ids['faucet_id'] = create_faucet(
+            package_ids['stablecoin_package'],
+            package_ids['usdc_package'],
+            package_ids['treasury_id'],  # Use our newly created Treasury
+            faucet_path
+        )
     
-    # Step 4b: Verify STABLECOIN_PACKAGE (if not found)
-    if package_ids['treasury_id'] and not package_ids['stablecoin_package']:
-        print_section("STEP 4b: Verifying STABLECOIN_PACKAGE")
-        response = input("STABLECOIN_PACKAGE not found. Do you want to derive it from Treasury? (Y/n): ").strip().lower()
-        if response != 'n' and response != 'no':
-            package_ids['stablecoin_package'] = verify_stablecoin_from_treasury(package_ids['treasury_id'])
-    
-    # Step 5: Create faucet
-    print_section("STEP 5: Creating Faucet")
-    
-    # Check if faucet already exists
-    faucet_data = load_json_file(json_dir / 'faucet.out.json')
-    if faucet_data:
-        package_ids['faucet_id'] = extract_faucet_id(faucet_data, package_ids['usdc_package'])
-        if package_ids['faucet_id']:
-            print_contract_id("Loaded existing FAUCET_ID", package_ids['faucet_id'], "🚰")
-        else:
-            print_warning("Found faucet.out.json but could not extract FAUCET_ID.")
-            faucet_data = None
-    
-    # Create faucet if not found and we have required IDs
-    if not package_ids['faucet_id'] and all([package_ids['stablecoin_package'], package_ids['usdc_package'], package_ids['treasury_id']]):
-        response = input("Do you want to create a new faucet? (Y/n): ").strip().lower()
-        if response != 'n' and response != 'no':
-            package_ids['faucet_id'] = create_faucet(
-                package_ids['stablecoin_package'], 
-                package_ids['usdc_package'], 
-                package_ids['treasury_id'], 
-                json_dir / 'faucet.out.json'
-            )
-    elif not package_ids['faucet_id']:
-        print_error("Cannot create faucet: Missing required IDs.")
-        print_info(f"   STABLECOIN_PACKAGE: {'✅' if package_ids['stablecoin_package'] else '❌'}")
-        print_info(f"   USDC_PACKAGE: {'✅' if package_ids['usdc_package'] else '❌'}")
-        print_info(f"   TREASURY: {'✅' if package_ids['treasury_id'] else '❌'}")
-    
+    # Step 6: Verify USDC data type
+    print_section("STEP 6: Verifying USDC Data Type")
+    verification_success = verify_usdc_data_type(package_ids['usdc_package'], package_ids['treasury_id'])
+
+    if verification_success:
+        print_success("✅ USDC data type verification passed!")
+    else:
+        print_warning("⚠️  USDC data type verification failed. Check the output above for details.")
+        print_info("   This may indicate TypeMismatch issues when using USDC in other projects.")
+    print()
+
     # Display final results
     print_final_results({
         'sui_extensions_package': package_ids['sui_extensions_package'],
