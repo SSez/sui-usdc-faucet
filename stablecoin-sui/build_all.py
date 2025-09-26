@@ -352,8 +352,7 @@ def build_and_publish_package(script_dir, json_dir, package_config):
     cmd = ['sui', 'client', 'publish', '--gas-budget', GAS_BUDGET, '--json']
     #if needs_unpublished_deps:
     #    cmd.insert(-1, '--with-unpublished-dependencies')
-    
-    print_command(f"Command: {' '.join(cmd)}")
+
     output = run_command(cmd, cwd=package_dir)
     
     if not output:
