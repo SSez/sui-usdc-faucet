@@ -56,6 +56,7 @@ export default function App() {
                   onChange={(e) => setField('amount', e.target.value)}
                   placeholder="100"
                 />
+                <div className="mt-1 text-xs text-gray-500">Max: 1,000,000 USDC</div>
               </div>
               <div className="flex items-end">
                 <button

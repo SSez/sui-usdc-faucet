@@ -15,8 +15,9 @@
 // limitations under the License.
 
 module usdc::usdc {
-    use std::string;
-    use sui::coin_registry;
+    use std::ascii::string;
+    use sui::coin;
+    use sui::url;
     use stablecoin::treasury;
     use sui_extensions::upgrade_service;
 
@@ -39,17 +40,16 @@ module usdc::usdc {
             ctx
         );
 
-        let (mut currency, treasury_cap) = coin_registry::new_currency_with_otw(
+        let (treasury_cap, deny_cap, metadata) = coin::create_regulated_currency_v2(
             witness,
-            6,                       // decimals
-            string::utf8(b"USDC"),   // symbol
-            string::utf8(b"USDC"),   // name
-            string::utf8(DESCRIPTION),
-            string::utf8(ICON_URL),
+            6,               // decimals
+            b"USDC",         // symbol
+            b"USDC",         // name
+            DESCRIPTION,
+            option::some(url::new_unsafe(string(ICON_URL))),
+            true,            // allow global pause
             ctx
         );
-        let deny_cap = currency.make_regulated(true, ctx);
-        let metadata_cap = currency.finalize(ctx);
 
         let treasury = treasury::new(
             treasury_cap, 
@@ -62,7 +62,7 @@ module usdc::usdc {
             ctx
         );
             
-        transfer::public_transfer(metadata_cap, ctx.sender());
+        transfer::public_share_object(metadata);
         transfer::public_share_object(treasury);
         transfer::public_share_object(upgrade_service);
     }
