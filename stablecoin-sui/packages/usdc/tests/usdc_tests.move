@@ -16,22 +16,19 @@
 
 #[test_only]
 module usdc::usdc_tests {
-    use std::string;
-    use std::unit_test;
+    use std::{string, ascii};
     use sui::{
         test_scenario, 
-        coin::{Self},
-        coin_registry::{Currency},
+        coin::{Self, CoinMetadata, RegulatedCoinMetadata},
         deny_list::{Self, DenyList},
+        url
     };
-    use sui::coin_registry;
     use stablecoin::treasury::Treasury;
     use sui_extensions::upgrade_service::UpgradeService;
     use usdc::usdc::{Self, USDC};
 
     const DEPLOYER: address = @0x0;
     const RANDOM_ADDRESS: address = @0x10;
-    const COIN_REGISTRY_ADDRESS: address = @0xc;
 
     #[test]
     fun init__should_create_correct_number_of_objects() {
@@ -39,12 +36,9 @@ module usdc::usdc_tests {
         usdc::init_for_testing(scenario.ctx());
 
         let previous_tx_effects = scenario.next_tx(DEPLOYER);
-        let created_len = previous_tx_effects.created().length();
-        let frozen_len = previous_tx_effects.frozen().length();
-        let shared_len = previous_tx_effects.shared().length();
-        unit_test::assert_eq!(created_len, 4);
-        unit_test::assert_eq!(frozen_len, 0);
-        unit_test::assert_eq!(shared_len, 2); // Shared treasury and upgrade service objects
+        std::unit_test::assert_eq!(previous_tx_effects.created().length(), 4);
+        std::unit_test::assert_eq!(previous_tx_effects.frozen().length(), 1);
+        std::unit_test::assert_eq!(previous_tx_effects.shared().length(), 3); // Shared metadata, treasury and upgrade service objects
 
         scenario.end();
     }
@@ -55,22 +49,13 @@ module usdc::usdc_tests {
         usdc::init_for_testing(scenario.ctx());
 
         scenario.next_tx(DEPLOYER);
-        let currency = test_scenario::take_from_address<Currency<USDC>>(
-            &scenario,
-            COIN_REGISTRY_ADDRESS
-        );
-        unit_test::assert_eq!(coin_registry::decimals(&currency), 6);
-        unit_test::assert_eq!(coin_registry::name(&currency), string::utf8(b"USDC"));
-        unit_test::assert_eq!(coin_registry::symbol(&currency), string::utf8(b"USDC"));
-        unit_test::assert_eq!(
-            coin_registry::description(&currency),
-            string::utf8(b"USDC is a US dollar-backed stablecoin issued by Circle. USDC is designed to provide a faster, safer, and more efficient way to send, spend, and exchange money around the world.")
-        );
-        unit_test::assert_eq!(
-            coin_registry::icon_url(&currency),
-            string::utf8(b"https://www.circle.com/hubfs/Brand/USDC/USDC_icon_32x32.png")
-        );
-        test_scenario::return_to_address(COIN_REGISTRY_ADDRESS, currency);
+        let metadata = scenario.take_shared<CoinMetadata<USDC>>();
+        std::unit_test::assert_eq!(metadata.get_decimals(), 6);
+        std::unit_test::assert_eq!(metadata.get_name(), string::utf8(b"USDC"));
+        std::unit_test::assert_eq!(metadata.get_symbol(), ascii::string(b"USDC"));
+        std::unit_test::assert_eq!(metadata.get_description(), string::utf8(b"USDC is a US dollar-backed stablecoin issued by Circle. USDC is designed to provide a faster, safer, and more efficient way to send, spend, and exchange money around the world."));
+        std::unit_test::assert_eq!(metadata.get_icon_url(), option::some(url::new_unsafe(ascii::string(b"https://www.circle.com/hubfs/Brand/USDC/USDC_icon_32x32.png"))));
+        test_scenario::return_shared(metadata);
 
         scenario.end();
     }
@@ -81,12 +66,7 @@ module usdc::usdc_tests {
         usdc::init_for_testing(scenario.ctx());
 
         scenario.next_tx(DEPLOYER);
-        let currency = test_scenario::take_from_address<Currency<USDC>>(
-            &scenario,
-            COIN_REGISTRY_ADDRESS
-        );
-        unit_test::assert_eq!(coin_registry::deny_cap_id(&currency).is_some(), true);
-        test_scenario::return_to_address(COIN_REGISTRY_ADDRESS, currency);
+        std::unit_test::assert_eq!(test_scenario::has_most_recent_immutable<RegulatedCoinMetadata<USDC>>(), true);
 
         scenario.end();
     }
@@ -98,7 +78,7 @@ module usdc::usdc_tests {
 
         scenario.next_tx(DEPLOYER);
         let treasury = scenario.take_shared<Treasury<USDC>>();
-        unit_test::assert_eq!(treasury.total_supply(), 0);
+        std::unit_test::assert_eq!(treasury.total_supply(), 0);
         test_scenario::return_shared(treasury);
 
         scenario.end();
@@ -117,7 +97,7 @@ module usdc::usdc_tests {
         let mut deny_list = scenario.take_shared<DenyList>();
 
         treasury.blocklist(&mut deny_list, RANDOM_ADDRESS, scenario.ctx());
-        unit_test::assert_eq!(coin::deny_list_v2_contains_next_epoch<USDC>(&deny_list, RANDOM_ADDRESS), true);
+        std::unit_test::assert_eq!(coin::deny_list_v2_contains_next_epoch<USDC>(&deny_list, RANDOM_ADDRESS), true);
 
         test_scenario::return_shared(deny_list);
         test_scenario::return_shared(treasury);
@@ -132,7 +112,7 @@ module usdc::usdc_tests {
 
         scenario.next_tx(DEPLOYER);
         let upgrade_service = scenario.take_shared<UpgradeService<USDC>>();
-        unit_test::assert_eq!(upgrade_service.admin(), DEPLOYER);
+        std::unit_test::assert_eq!(upgrade_service.admin(), DEPLOYER);
         test_scenario::return_shared(upgrade_service);
 
         scenario.end();
