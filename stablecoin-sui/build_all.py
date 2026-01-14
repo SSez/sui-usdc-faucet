@@ -651,7 +651,7 @@ def check_existing_json_files(json_dir):
         print_info(f"  - {json_file}")
     print()
     
-    response = input("Do you want to use these existing files or create new ones? (Y/n): ").strip().lower()
+    response = input("Create new files? (y = create new files, n = use existing files) [n]:").strip().lower()
     
     if response.lower() == 'n':
         print_info("Using existing JSON files.")
