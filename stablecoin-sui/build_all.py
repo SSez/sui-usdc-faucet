@@ -526,8 +526,6 @@ def create_treasury(stablecoin_package, usdc_package, owner_address, treasury_js
         return None
 
 
-
-
 def create_faucet(stablecoin_package, usdc_package, treasury_id, faucet_json_path):
     """Create faucet using SUI client call and save output to JSON file."""
     if not all([stablecoin_package, usdc_package, treasury_id]):
