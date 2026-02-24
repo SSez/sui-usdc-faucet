@@ -13,7 +13,7 @@ module stablecoin::faucet {
 
     // === Defaults ===
     // Note: These defaults are USDC-friendly (6 decimals), but the module is generic over T.
-    const MAX_REQUEST_AMOUNT: u64 = 1_000_000 /* 1M units */ * 1_000_000 /* 10^6 decimals */;
+    const MAX_REQUEST_AMOUNT: u64 = 50_000_000 /* 50M units */ * 1_000_000 /* 10^6 decimals */;
     const RATE_LIMIT_PERIOD_MS: u64 = 3_600_000; // 1 hour in ms (reduced for testing)
     const MAX_REQUESTS_PER_PERIOD: u64 = 1000;
 
