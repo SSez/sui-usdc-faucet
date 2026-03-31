@@ -54,7 +54,7 @@ export default function App() {
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                   value={amount}
                   onChange={(e) => setField('amount', e.target.value)}
-                  placeholder="100"
+                  placeholder="50000000"
                 />
                 <div className="mt-1 text-xs text-gray-500">Max: 50,000,000 USDC</div>
               </div>

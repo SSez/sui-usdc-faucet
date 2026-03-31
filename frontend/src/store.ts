@@ -31,7 +31,7 @@ type AppState = {
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
-  amount: '100',
+  amount: '50000000',
   recipient: '',
   busy: false,
   txDigest: null,
