@@ -3,7 +3,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import express from "express";
 import cors from "cors";
-import { SuiClient } from "@mysten/sui/client";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
 import { decodeSuiPrivateKey } from "@mysten/sui/cryptography";
@@ -20,13 +20,16 @@ app.use(
   cors({
     origin: ["http://localhost:3000"],
     methods: ["POST", "OPTIONS"],
-  })
+  }),
 );
 
 // Env
 const PORT = Number(process.env.PORT || 8787);
-const FULLNODE_URL =
-  process.env.FULLNODE_URL || "https://fullnode.devnet.sui.io:443";
+const SUI_NETWORK = process.env.SUI_NETWORK || "devnet";
+const DEVNET_GRPC_URL =
+  process.env.DEVNET_GRPC_URL || "https://fullnode.devnet.sui.io:443";
+const TESTNET_GRPC_URL =
+  process.env.TESTNET_GRPC_URL || "https://fullnode.testnet.sui.io:443";
 const FAUCET_ID = process.env.FAUCET_ID || "";
 const CLOCK = process.env.CLOCK || "0x6";
 const PRIVATE_KEY_HEX = process.env.SUI_PRIVATE_KEY || "";
@@ -36,7 +39,12 @@ const USDC_PACKAGE = process.env.USDC_PACKAGE || "";
 const TREASURY = process.env.TREASURY || ""; // stablecoin::treasury::Treasury<USDC>
 
 // Diagnose missing envs explicitly (without printing secrets)
-const isStablecoinMode = !!(STABLECOIN_PACKAGE && USDC_PACKAGE && TREASURY && FAUCET_ID);
+const isStablecoinMode = !!(
+  STABLECOIN_PACKAGE &&
+  USDC_PACKAGE &&
+  TREASURY &&
+  FAUCET_ID
+);
 
 const _missing = [
   !FAUCET_ID && "FAUCET_ID",
@@ -50,11 +58,32 @@ if (_missing.length) {
   console.warn(`Missing env: ${_missing.join(", ")}`);
   // eslint-disable-next-line no-console
   console.warn(
-    `cwd=${process.cwd()} FULLNODE_URL=${FULLNODE_URL} CLOCK=${CLOCK} (SUI_PRIVATE_KEY set? ${PRIVATE_KEY_HEX ? "yes" : "no"})`
+    `cwd=${process.cwd()} (SUI_PRIVATE_KEY set? ${PRIVATE_KEY_HEX ? "yes" : "no"})`,
   );
 }
 
-const client = new SuiClient({ url: FULLNODE_URL });
+// Select the appropriate gRPC URL based on the SUI_NETWORK environment variable
+let grpcUrl;
+switch (SUI_NETWORK) {
+  case "devnet":
+    grpcUrl = DEVNET_GRPC_URL;
+    break;
+  case "testnet":
+    grpcUrl = TESTNET_GRPC_URL;
+    break;
+  default:
+    grpcUrl = DEVNET_GRPC_URL; // Default to devnet
+    console.warn(`Unknown network ${SUI_NETWORK}, defaulting to devnet`);
+}
+
+console.log(`Using gRPC URL for ${SUI_NETWORK}:`, grpcUrl);
+
+// Configure gRPC client using SuiGrpcTransportOptions
+const client = new SuiGrpcClient({
+  baseUrl: grpcUrl,
+  network: SUI_NETWORK,
+});
+console.log("gRPC client created successfully");
 
 function hexToBytes(hex) {
   const s = hex.startsWith("0x") ? hex.slice(2) : hex;
@@ -77,11 +106,13 @@ function loadKeypairFromEnv(secret) {
     }
     const scheme = data[0];
     // 0x00 = ed25519
-    if (scheme !== 0x00) throw new Error("Unsupported key scheme in suiprivkey");
+    if (scheme !== 0x00)
+      throw new Error("Unsupported key scheme in suiprivkey");
     let secretKey = data.slice(1);
     // Some exports may include 64-byte expanded secret; trim to 32 bytes
     if (secretKey.length === 64) secretKey = secretKey.slice(0, 32);
-    if (secretKey.length !== 32) throw new Error("Invalid ed25519 secret key length");
+    if (secretKey.length !== 32)
+      throw new Error("Invalid ed25519 secret key length");
     return Ed25519Keypair.fromSecretKey(secretKey);
   }
 
@@ -99,7 +130,7 @@ function loadKeypairFromEnv(secret) {
     }
     if (bytes.length !== 32)
       throw new Error(
-        "SUI_PRIVATE_KEY must be 'suiprivkey1…', 'ed25519:<base64>', or 32/64 bytes hex"
+        "SUI_PRIVATE_KEY must be 'suiprivkey1…', 'ed25519:<base64>', or 32/64 bytes hex",
       );
     return Ed25519Keypair.fromSecretKey(bytes);
   }
@@ -117,7 +148,9 @@ app.post("/api/request", async (req, res) => {
       if (!USDC_PACKAGE) missing.push("USDC_PACKAGE");
       if (!TREASURY) missing.push("TREASURY");
       // eslint-disable-next-line no-console
-      console.warn("/api/request missing env:", missing, { mode: "stablecoin" });
+      console.warn("/api/request missing env:", missing, {
+        mode: "stablecoin",
+      });
       return res.status(500).json({
         error: "Faucet not configured",
         missing,
@@ -127,7 +160,9 @@ app.post("/api/request", async (req, res) => {
           CLOCK,
           MODE: isStablecoinMode ? "stablecoin" : "unconfigured",
           FAUCET_ID: FAUCET_ID?.slice(0, 10) + "...",
-          STABLECOIN_PACKAGE: STABLECOIN_PACKAGE ? STABLECOIN_PACKAGE.slice(0, 10) + "..." : "",
+          STABLECOIN_PACKAGE: STABLECOIN_PACKAGE
+            ? STABLECOIN_PACKAGE.slice(0, 10) + "..."
+            : "",
           USDC_PACKAGE: USDC_PACKAGE ? USDC_PACKAGE.slice(0, 10) + "..." : "",
           TREASURY: TREASURY ? TREASURY.slice(0, 10) + "..." : "",
           SUI_PRIVATE_KEY: PRIVATE_KEY_HEX ? "set" : "missing",
@@ -167,7 +202,13 @@ app.post("/api/request", async (req, res) => {
       transaction: tx,
     });
 
-    return res.json({ digest: result.digest });
+    console.log("Transaction result:", result);
+
+    // Extract digest from the nested response structure
+    const digest = result.Transaction?.digest || result.digest;
+    console.log("Extracted digest:", digest);
+
+    return res.json({ digest });
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error(e);
