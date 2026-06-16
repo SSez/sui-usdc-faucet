@@ -3,20 +3,9 @@ name = "usdc"
 edition = "2024"
 license = "Apache 2.0"
 
-[dependencies.Sui]
-git = "https://github.com/MystenLabs/sui.git"
-subdir = "crates/sui-framework/packages/sui-framework"
-rev = "mainnet-v1.62.1"
-
-[dependencies.stablecoin]
-local = "../stablecoin"
-
-[dependencies.sui_extensions]
-local = "../sui_extensions"
-
-[addresses]
-usdc = "0x0"
-
-[dev-dependencies]
-
-[dev-addresses]
+# New (sui >= 1.63) package management format — no [addresses] section; the
+# package's named address comes from `name` above. Sui/MoveStdlib are implicit
+# system deps. Build with `--build-env testnet`, publish via `test-publish`.
+[dependencies]
+stablecoin = { local = "../stablecoin" }
+sui_extensions = { local = "../sui_extensions" }

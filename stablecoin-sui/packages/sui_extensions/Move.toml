@@ -3,14 +3,9 @@ name = "sui_extensions"
 edition = "2024"
 license = "Apache 2.0"
 
-[dependencies.Sui]
-git = "https://github.com/MystenLabs/sui.git"
-subdir = "crates/sui-framework/packages/sui-framework"
-rev = "mainnet-v1.62.1"
-
-[addresses]
-sui_extensions = "0x0"
-
-[dev-dependencies]
-
-[dev-addresses]
+# New (sui >= 1.63) package management format. The Sui framework and MoveStdlib
+# are implicit system dependencies, auto-resolved per build environment.
+# devnet is ephemeral, so build with `--build-env testnet` (identical system
+# deps) and publish with `sui client test-publish`. The package's own named
+# address comes from `name` above — no [addresses] section in the new system.
+[dependencies]
