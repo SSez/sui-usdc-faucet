@@ -19,6 +19,17 @@ from pathlib import Path
 
 GAS_BUDGET = '300000000'
 
+# Deploy target network. devnet (and localnet) are EPHEMERAL — Sui has no
+# devnet framework mapping and devnet's chain-id changes weekly, so we do NOT
+# build with `--build-env devnet`. Instead, per the Sui package-manager
+# migration guide: build against testnet's (identical) system deps and use
+# `sui client test-publish` to publish to the active devnet network, recording
+# addresses in an ephemeral Pub.devnet.toml instead of polluting Published.toml.
+TARGET_NETWORK = 'devnet'
+# Compile-time dependency environment. Only 'testnet'/'mainnet' are valid; this
+# does NOT change the publish target (that's the active `sui client` env).
+BUILD_ENV = 'testnet'
+
 # ANSI Color Codes
 class Colors:
     """ANSI color codes for professional terminal output."""
@@ -343,15 +354,25 @@ def build_and_publish_package(script_dir, json_dir, package_config):
     
     # Build the package
     print_progress(f"Building {package_name} package...")
-    build_result = run_command(['sui', 'move', 'build'], cwd=package_dir)
+    build_result = run_command(['sui', 'move', 'build', '--build-env', BUILD_ENV], cwd=package_dir)
     if build_result is None:
         return (None, None) if extract_treasury else None
-    
-    # Publish the package - ALWAYS use --with-unpublished-dependencies and --json
+
+    # Publish the package. devnet is ephemeral, so use `test-publish`, which
+    # publishes to the active network but records addresses in a shared
+    # ephemeral pubfile (Pub.<network>.toml) rather than Published.toml. The
+    # shared pubfile lets later packages resolve already-published local deps
+    # (e.g. stablecoin -> sui_extensions), so publish order matters.
     print_progress(f"Publishing {package_name} package...")
-    cmd = ['sui', 'client', 'publish', '--gas-budget', GAS_BUDGET, '--json']
-    #if needs_unpublished_deps:
-    #    cmd.insert(-1, '--with-unpublished-dependencies')
+    pubfile_path = script_dir / f'Pub.{TARGET_NETWORK}.toml'
+    cmd = [
+        'sui', 'client', 'test-publish',
+        '--build-env', BUILD_ENV,
+        '--pubfile-path', str(pubfile_path),
+        '--publish-unpublished-deps',
+        '--gas-budget', GAS_BUDGET,
+        '--json',
+    ]
 
     output = run_command(cmd, cwd=package_dir)
     
