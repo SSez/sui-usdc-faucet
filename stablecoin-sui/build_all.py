@@ -610,6 +610,38 @@ def create_faucet(stablecoin_package, usdc_package, treasury_id, faucet_json_pat
         return None
 
 
+def clear_stale_pubfile(script_dir):
+    """Remove the ephemeral pubfile if it was created for a different chain.
+
+    devnet/localnet are ephemeral and reset periodically (devnet ~weekly), which
+    changes the chain-id. `test-publish` refuses to reuse a pubfile pinned to an
+    old chain-id, so we drop it and let it be recreated for the current chain.
+    """
+    pubfile_path = script_dir / f'Pub.{TARGET_NETWORK}.toml'
+    if not pubfile_path.exists():
+        return
+
+    try:
+        current_chain = subprocess.run(
+            ['sui', 'client', 'chain-identifier'],
+            capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except Exception as e:
+        print_warning(f"Could not determine current chain-id ({e}); leaving {pubfile_path.name} as-is.")
+        return
+
+    match = re.search(r'chain-id\s*=\s*"([^"]+)"', pubfile_path.read_text())
+    pubfile_chain = match.group(1) if match else None
+
+    if pubfile_chain != current_chain:
+        pubfile_path.unlink()
+        print_warning(
+            f"Removed stale {pubfile_path.name} (chain-id "
+            f"{pubfile_chain or 'unknown'} != current {current_chain}); "
+            f"{TARGET_NETWORK} was likely reset."
+        )
+
+
 def save_config_file(config_data, output_path):
     """Save extracted IDs to a config file."""
     try:
@@ -814,6 +846,9 @@ def main():
     print_info(f"Configuration output: {config_output_path}")
     print()
     
+    # Drop an ephemeral pubfile left over from a previous (now-reset) devnet.
+    clear_stale_pubfile(script_dir)
+
     # Check for existing JSON files
     use_existing_files = check_existing_json_files(json_dir)
     print()
