@@ -8,7 +8,7 @@
     "start": "node --env-file=.env src/server.js"
   },
   "dependencies": {
-    "@mysten/sui": "^2.17.0",
+    "@mysten/sui": "^2.20.1",
     "bech32": "^2.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
