@@ -21,7 +21,7 @@ type AppState = {
   txDigest: string | null;
   error: string | null;
   lastSent: { recipient: string; amount: number } | null;
-  setField: (key: keyof Pick<AppState, 'amount'>, value: any) => void;
+  setField: (key: keyof Pick<AppState, 'amount'>, value: string) => void;
   setRecipient: (recipient: string) => void;
   setBusy: (busy: boolean) => void;
   setTxDigest: (digest: string | null) => void;
@@ -37,7 +37,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   txDigest: null,
   error: null,
   lastSent: null,
-  setField: (key, value) => set({ [key]: value } as any),
+  setField: (key, value) => set({ [key]: value }),
   setRecipient: (recipient) => set({ recipient }),
   setBusy: (busy) => set({ busy }),
   setTxDigest: (digest) => set({ txDigest: digest }),
@@ -71,8 +71,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const digest = data.digest || data.txDigest || null;
       setTxDigest(digest);
       setLastSent({ recipient, amount: Number(amount) });
-    } catch (err: any) {
-      setError(parseErrorMessage(err?.message ?? String(err)));
+    } catch (err) {
+      setError(
+        parseErrorMessage(err instanceof Error ? err.message : String(err))
+      );
     } finally {
       setBusy(false);
     }

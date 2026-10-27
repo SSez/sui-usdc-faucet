@@ -212,25 +212,31 @@ def load_json_file(file_path):
         return None
 
 
-def get_gas_coin():
-    """Return the id of the largest gas coin owned by the active address.
+def get_gas_args():
+    """Return the `--gas` CLI args for the active address, or None if it has no SUI.
 
-    The CLI's automatic gas selection goes through a gRPC path that the current
-    devnet node rejects ("error converting from protobuf: field:
-    transaction.bcs"), so every transaction pins its gas coin explicitly.
+    The CLI's automatic gas selection went through a gRPC path that older devnet
+    nodes rejected ("error converting from protobuf: field: transaction.bcs"), so
+    the largest gas coin is pinned explicitly when one exists. The faucet now
+    funds the address balance instead of sending coin objects; with no coin to
+    pin, `--gas` is omitted and the CLI pays gas from the address balance.
     """
     try:
         out = subprocess.run(
             ['sui', 'client', 'gas', '--json'],
             capture_output=True, text=True, check=True,
         ).stdout
-        coins = json.loads(out).get('gasCoins', [])
+        data = json.loads(out)
     except (subprocess.CalledProcessError, json.JSONDecodeError):
         return None
 
-    if not coins:
-        return None
-    return max(coins, key=lambda c: int(c.get('mistBalance', 0)))['gasCoinId']
+    coins = data.get('gasCoins', [])
+    if coins:
+        coin = max(coins, key=lambda c: int(c.get('mistBalance', 0)))['gasCoinId']
+        return ['--gas', coin]
+    if int(data.get('addressMistBalance', 0)) > 0:
+        return []
+    return None
 
 
 def run_command(cmd, cwd=None, capture_output=True):
@@ -385,9 +391,9 @@ def build_and_publish_package(script_dir, json_dir, package_config):
     # shared pubfile lets later packages resolve already-published local deps
     # (e.g. stablecoin -> sui_extensions), so publish order matters.
     print_progress(f"Publishing {package_name} package...")
-    gas_coin = get_gas_coin()
-    if gas_coin is None:
-        print_error("No gas coin found for the active address.")
+    gas_args = get_gas_args()
+    if gas_args is None:
+        print_error("No SUI (gas coin or address balance) found for the active address.")
         return (None, None) if extract_treasury else None
 
     # Local deps are published one at a time in dependency order and recorded in
@@ -399,7 +405,7 @@ def build_and_publish_package(script_dir, json_dir, package_config):
         '--build-env', BUILD_ENV,
         '--pubfile-path', str(pubfile_path),
         '--gas-budget', GAS_BUDGET,
-        '--gas', gas_coin,
+        *gas_args,
         '--json',
     ]
 
@@ -529,9 +535,9 @@ def create_treasury(stablecoin_package, usdc_package, owner_address, treasury_js
     print_header("Creating Treasury", Colors.BRIGHT_CYAN)
     print_info("This will create a Treasury<USDC> object with our specific USDC type.")
 
-    gas_coin = get_gas_coin()
-    if gas_coin is None:
-        print_error("No gas coin found for the active address.")
+    gas_args = get_gas_args()
+    if gas_args is None:
+        print_error("No SUI (gas coin or address balance) found for the active address.")
         return None
 
     # Build the SUI client command
@@ -543,7 +549,7 @@ def create_treasury(stablecoin_package, usdc_package, owner_address, treasury_js
         '--type-args', f'{usdc_package}::usdc::USDC',
         '--args', f"{owner_address}",
         '--gas-budget', GAS_BUDGET,
-        '--gas', gas_coin,
+        *gas_args,
         '--json'
     ]
 
@@ -598,9 +604,9 @@ def create_faucet(stablecoin_package, usdc_package, treasury_id, faucet_json_pat
         print_warning("Faucet creation cancelled by user.")
         return None
     
-    gas_coin = get_gas_coin()
-    if gas_coin is None:
-        print_error("No gas coin found for the active address.")
+    gas_args = get_gas_args()
+    if gas_args is None:
+        print_error("No SUI (gas coin or address balance) found for the active address.")
         return None
 
     # Build the SUI client command
@@ -612,7 +618,7 @@ def create_faucet(stablecoin_package, usdc_package, treasury_id, faucet_json_pat
         '--type-args', f'{usdc_package}::usdc::USDC',
         '--args', treasury_id,
         '--gas-budget', GAS_BUDGET,
-        '--gas', gas_coin,
+        *gas_args,
         '--json'
     ]
     
