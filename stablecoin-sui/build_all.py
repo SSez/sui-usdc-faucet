@@ -17,6 +17,8 @@ import re
 import subprocess
 from pathlib import Path
 
+# No fixed --gas-budget: devnet publish costs exceed 1 SUI and drift, so the CLI
+# dry-runs each tx to estimate the budget. (Only used by dead code below.)
 GAS_BUDGET = '300000000'
 
 # Deploy target network. devnet (and localnet) are EPHEMERAL — Sui has no
@@ -404,7 +406,6 @@ def build_and_publish_package(script_dir, json_dir, package_config):
         'sui', 'client', 'test-publish',
         '--build-env', BUILD_ENV,
         '--pubfile-path', str(pubfile_path),
-        '--gas-budget', GAS_BUDGET,
         *gas_args,
         '--json',
     ]
@@ -548,7 +549,6 @@ def create_treasury(stablecoin_package, usdc_package, owner_address, treasury_js
         '--function', 'create',
         '--type-args', f'{usdc_package}::usdc::USDC',
         '--args', f"{owner_address}",
-        '--gas-budget', GAS_BUDGET,
         *gas_args,
         '--json'
     ]
@@ -617,7 +617,6 @@ def create_faucet(stablecoin_package, usdc_package, treasury_id, faucet_json_pat
         '--function', 'create',
         '--type-args', f'{usdc_package}::usdc::USDC',
         '--args', treasury_id,
-        '--gas-budget', GAS_BUDGET,
         *gas_args,
         '--json'
     ]
@@ -673,6 +672,10 @@ def clear_stale_pubfile(script_dir):
             ['sui', 'client', 'chain-identifier'],
             capture_output=True, text=True, check=True
         ).stdout.strip()
+        # Newer CLIs print "Base58: ...\nHex: <id>"; pubfiles store the hex form.
+        hex_match = re.search(r'Hex:\s*(\w+)', current_chain)
+        if hex_match:
+            current_chain = hex_match.group(1)
     except Exception as e:
         print_warning(f"Could not determine current chain-id ({e}); leaving {pubfile_path.name} as-is.")
         return
